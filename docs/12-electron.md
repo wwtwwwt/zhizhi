@@ -27,4 +27,6 @@ Store支持注入SecretCodec，桌面入口用safeStorage加密／解密整个�
 - `.github/workflows/release.yml`：推送 `v*` tag 或手动运行时，构建三种目标并只上传三个安装包（Windows x64／arm64 EXE、macOS arm64 DMG）到 GitHub Release；构建前从tag同步临时版本号；使用自动 `GITHUB_TOKEN`，不需要额外发布密钥。
 - macOS发布只保留DMG；Windows发布只保留NSIS EXE。Linux仍可在本地用electron-builder打包，但不在当前Actions发布矩阵中。当前只验证macOS arm64，其他平台／架构不能视为已验证。GitHub自动附带的Source code压缩包不由Actions生成。
 
+Release工作流使用原生Node.js 24运行时的官方Actions（checkout／setup-node／upload-artifact v7、download-artifact v8），发布任务固定ubuntu-24.04；macOS构建使用macos-15 ARM64。GitHub托管macOS ARM64容量排队提示由平台产生，工作流无法消除。
+
 当前未配置开发者签名、公证和自动更新。用户负责UI视觉验收，桌面测试仅执行代码和DOM/API断言。

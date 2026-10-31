@@ -55,6 +55,8 @@ jobs:
         run: npm ci
 
       - name: Build application
+        env:
+          ZHIZHI_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: npm run build:electron
 
       - name: Package ${{ matrix.platform }} ${{ matrix.arch }}

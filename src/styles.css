@@ -178,3 +178,5 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 .autosave-status.error{color:#b42318}
 .config-fields{border:0;padding:0;margin:0;min-width:0}
 .config-error{color:#b42318;font-size:12px;line-height:1.6;margin:10px 0 0}
+
+.about-settings{max-width:520px;padding:18px 0}.about-brand{display:flex;align-items:center;gap:14px;margin:4px 0 28px}.about-brand img{background:#ededed;border-radius:14px;padding:10px}.about-brand strong{display:block;font-size:18px;font-weight:600;color:#333;letter-spacing:1px}.about-brand span{display:block;margin-top:4px;font-size:11px;color:#999;letter-spacing:.6px}.about-details{display:grid;grid-template-columns:80px 1fr;gap:0;font-size:12px;border-top:1px solid #eee}.about-details dt,.about-details dd{margin:0;padding:12px 0;border-bottom:1px solid #eee}.about-details dt{color:#888}.about-details dd{color:#444}.about-repository{display:inline-flex;align-items:center;gap:6px;margin-top:20px;color:#666;font-size:12px;text-decoration:none}.about-repository:hover{color:#222;text-decoration:underline}

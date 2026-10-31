@@ -1,0 +1,42 @@
+# 09 · 文档导入
+
+## 入口与消息
+
+首页「想从哪里开始？」下方提供Markdown文件和论文链接导入，也可直接提问。导入成功创建独立会话，首条为已完成user消息，document_name保存文件名、document_source保存论文来源。
+
+导入不创建generation、不调用LLM，首次打开定位文档开头。文档正文自动切块，可编辑、选择追问／笔记、继续主流对话；非图片块有分支后可重新解释。
+
+## Markdown和本地图片
+
+浏览器无法凭一个Markdown文件访问相邻文件。导入窗口允许补选图片或文件夹；包含单个Markdown的文件夹可自动选中文档。保留目录路径，处理相对路径、`..`和URL编码；平面选择仅在文件名唯一时匹配。缺失、冲突或非法资源在事务前拒绝，不创建半成品会话。
+
+| 内容 | 支持与限制 |
+|---|---|
+| Markdown | UTF-8，正文最多2 MiB |
+| 本地图片 | PNG／JPG／GIF／WebP／SVG，单图最多5 MiB，总计12 MiB |
+| 上传资源列表 | API最多200项 |
+| 远程图片 | 保留规范化HTTP(S)地址，依赖原站可用性 |
+| 内嵌图片 | raster base64 data URL转本地资源；不接受任意data协议 |
+| HTML／压缩包 | 不解析任意HTML布局，不自动解压资料包 |
+
+AST解析引用式图片／链接，将定义解析为可独立渲染的引用。图片从段落、列表、格式或表格中提取为独立块，周围文字序列化保持格式；代码中的图片语法仍为代码。所有流共用渲染，图片失败显示占位。
+
+本地图片以原字节及MIME存document_resources，通过`GET /api/document-resources/:id`读取，设置nosniff及sandbox CSP，SVG只作img展示。资源随会话删除，并在块／版本删除后回收不再使用的图片。
+
+resolve用AST移除展示图片，不展开document_resources，普通对话、冻结祖先、预算和重构一致处理。用户主动在输入框发送的图片附件仍进入模型请求。
+
+## 论文转换
+
+接入[InkToMd API](https://www.inktomd.com/api-docs)，对应[arXiv入口](https://www.inktomd.com/arxiv-to-markdown)。服务端POST `https://www.inktomd.com/api/convert-url`，JSON为`{ "url": "..." }`，读取返回的markdown，不要求Key。
+
+支持公开论文链接及arXiv新／旧格式ID、abs／pdf／html链接。arXiv统一优先HTML全文；无HTML或转换失败时尝试PDF，限流、大小超限及取消不触发PDF重试。直接转换abs页可能只得到摘要，因此不直接使用摘要地址。
+
+按标题生成文档名；arXiv HTML移除站点导航和错误说明尾部。相对资源按实际全文地址解析；PDF返回无法定位的相对图片时拒绝，并提示下载Markdown与图片后本地导入。转换器没有返回的图片不会自动补齐。
+
+请求超时120秒，关闭导入窗口取消。代理优先INKTOMD_PROXY、HTTPS_PROXY、HTTP_PROXY；未设置时探测本机127.0.0.1:7897，存在则使用，否则直连。使用undici fetch／ProxyAgent；此代理规则仅用于论文转换，不代表模型adapter采用同样代理。生产使用固定官方endpoint，测试允许注入本机stub。
+
+## 验证与限制
+
+自动化覆盖缺图回滚、资源持久化／删除、独立图片块、文档后续对话、图片不进入上下文，以及HTML优先、PDF回退、标题和限流处理。
+
+转换接入曾在真实服务核查，但此处不承诺外部服务的实时可用性、额度、内容完整性或图片数量。无PDF完整性保证；自动化采用本机stub，不将转换成功推断为学习效果或LLM理解能力。

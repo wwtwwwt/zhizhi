@@ -1,0 +1,31 @@
+appId: com.zhizhi.app
+productName: 枝知
+copyright: Copyright © 2026 zhizhi
+asar: true
+npmRebuild: false
+directories:
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+artifactName: zhizhi-${version}-${os}-${arch}.${ext}
+mac:
+  category: public.app-category.education
+  icon: build/icon.icns
+  target:
+    - dmg
+    - zip
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  icon: build/icon.png
+  category: Education
+  target:
+    - AppImage
+    - deb

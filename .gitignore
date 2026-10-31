@@ -1,0 +1,26 @@
+# Local application data and credentials
+.learnhelper/
+.env
+.env.*
+!.env.example
+secrets.json
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Dependencies and generated artifacts
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+*.log
+
+# macOS metadata
+.DS_Store
+
+# Desktop build output
+dist-electron/
+release/
+build/icon.iconset/

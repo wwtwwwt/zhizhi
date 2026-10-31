@@ -99,7 +99,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
   });
   app.get('/api/settings', (_req, res) => res.json(store.settings()));
   app.put('/api/settings', (req, res) => {
-    const data = z.object({ stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
+    const data = z.object({ theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
   });
   app.post('/api/fake/v1/chat/completions', async (req, res) => {
     const d = z.object({ messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.unknown())]) })), stream: z.literal(true), __fake: z.object({ kind: z.enum(['reply','branch','rewrite']), depth: z.number().int().min(0).max(500), delay: z.number().min(0).max(250), failure: z.enum(['error','disconnect']).optional() }) }).parse(req.body);

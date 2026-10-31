@@ -687,3 +687,32 @@ test('supplier and shared composers have no web search configuration or requests
   await expect(page.locator('.workspace .message-assistant [data-node]').first()).toBeVisible();
   expect(searchRequests).toEqual([]);
 });
+
+test('appearance autosaves, persists and follows system only when selected',async({page,request})=>{
+  await request.put('/api/settings',{data:{theme:'system'}});
+  await page.emulateMedia({colorScheme:'light'});
+  await page.goto('/settings');await page.getByRole('tab',{name:'通用',exact:true}).click();
+  const appearance=page.getByRole('combobox',{name:'外观',exact:true});
+  await expect(appearance).toHaveValue('system');
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.emulateMedia({colorScheme:'dark'});
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await appearance.selectOption('light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await expect.poll(async()=>(await(await request.get('/api/settings')).json()).theme).toBe('light');
+  await page.reload();await page.getByRole('tab',{name:'通用',exact:true}).click();
+  await expect(appearance).toHaveValue('light');await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await appearance.selectOption('dark');await page.emulateMedia({colorScheme:'light'});
+  await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await page.getByRole('tab',{name:'供应商',exact:true}).click();
+  await page.getByRole('button',{name:'添加模型',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'配置模型',exact:true});
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(32, 32, 32)');
+  await dialog.getByRole('button',{name:'取消',exact:true}).click();
+  await page.getByRole('tab',{name:'通用',exact:true}).click();await appearance.selectOption('system');
+  await expect(page.locator('html')).toHaveAttribute('data-theme','light');
+  await page.emulateMedia({colorScheme:'dark'});await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+  await expect.poll(async()=>(await(await request.get('/api/settings')).json()).theme).toBe('system');
+  expect((await request.put('/api/settings',{data:{theme:'invalid'}})).status()).toBe(400);
+});

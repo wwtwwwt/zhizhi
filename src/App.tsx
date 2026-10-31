@@ -7,6 +7,7 @@ import { layoutSideItems, type Corner } from '../shared/workspace-layout';
 import { ReasoningPanel } from './ReasoningPanel';
 import { SendComposer } from './SendComposer';
 import { ImportActions } from './DocumentImport';
+import { useTheme } from './theme';
 import { SettingsPage } from './SettingsPage';
 import type { SendOptions } from '../shared/models';
 import brandMark from './assets/zhizhi-mark.svg';
@@ -26,6 +27,7 @@ function userInitial(nickname?: string) {
 
 export function App() {
   const state = useAppState();
+  useTheme(state.settings?.theme);
   const [sessionId, setSessionId] = useState<string | null>(localStorage.getItem('lastSession'));
   const [stack, setStack] = useState<Layer[]>([]);
   const [closingFrom, setClosingFrom] = useState<number | null>(null);

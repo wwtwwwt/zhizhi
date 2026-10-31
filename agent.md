@@ -20,6 +20,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 - 删除当前／所有版本在菜单选择，确认窗口只二次确认；递归删除相关分支及无用资源，必要冻结祖先保留。普通确认可在设置关闭，全量清空始终确认。
 - 所有分支与WindowPanel共享并记住居中尺寸，四角缩放、不允许移动，仅下角显示L提示；堆叠方向up／left。
 - 公式KaTeX排版，整体选择、复制LaTeX和追问。复制全块返回raw Markdown，部分块截断源码，不修补格式。
+- 外观支持light／dark／system，默认跟随系统；src/theme.ts监听系统主题，localStorage.appearance只用于启动缓存，SQLite settings.theme为权威偏好。
 - 通用设置自动保存，无保存按钮：偏好即时应用，文本防抖450ms；失焦／离开提交待保存项，串行合并写入。模型配置（含模拟模式）使用WindowPanel弹窗，点击保存才生效；取消／关闭不落库。
 - 模型统一逐个配置，fake为固定模型并模拟reasoning；模型配置包含图片能力。输入框不再有默认模型设置，自动记住浏览器上次选择的模型；模型项悬停提示，支持复制配置。附件按图片能力处理，思考摘要与正文分离。
 - 品牌图标使用src/assets/zhizhi-mark.svg：圆形分支节点与Z形连线，用于侧栏、AI头像和网页favicon；交互中的追问／分支图标仍使用GitBranch。

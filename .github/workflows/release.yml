@@ -20,6 +20,7 @@ concurrency:
 
 env:
   NODE_VERSION: '24.18.0'
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -54,9 +55,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set package version from tag
+        shell: bash
+        run: |
+          version="${RELEASE_TAG#v}"
+          npm version "${version}" --no-git-tag-version --allow-same-version
+
       - name: Build application
         env:
-          ZHIZHI_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          ZHIZHI_RELEASE_TAG: ${{ env.RELEASE_TAG }}
         run: npm run build:electron
 
       - name: Package ${{ matrix.platform }} ${{ matrix.arch }}
@@ -69,10 +76,7 @@ jobs:
           name: zhizhi-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             release/*.dmg
-            release/*.zip
             release/*.exe
-            release/*.blockmap
-            release/latest*.yml
           if-no-files-found: error
           retention-days: 14
 
@@ -96,7 +100,10 @@ jobs:
           test -n "${RELEASE_TAG}"
           test -n "$(find release-assets -type f | head -1)"
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_TAG}" release-assets/* --repo "${GITHUB_REPOSITORY}" --clobber
+            while IFS= read -r asset; do
+              [ -z "${asset}" ] || gh release delete-asset "${RELEASE_TAG}" "${asset}" --repo "${GITHUB_REPOSITORY}" --yes
+            done < <(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name')
+            gh release upload "${RELEASE_TAG}" release-assets/* --repo "${GITHUB_REPOSITORY}"
           else
             gh release create "${RELEASE_TAG}" release-assets/* \
               --repo "${GITHUB_REPOSITORY}" \

@@ -60,7 +60,6 @@ npm run dist
 
 ```sh
 npm run dist -- --mac --arm64
-npm run dist -- --mac --x64
 npm run dist -- --win --x64
 npm run dist -- --win --arm64
 npm run dist -- --linux --x64
@@ -70,7 +69,7 @@ npm run dist -- --linux --x64
 
 工作流位于 `.github/workflows/release.yml`。它在推送 `v*` 标签时构建并发布 GitHub Release，也可以在 GitHub 的 **Actions → Build and release 枝知 → Run workflow** 手动输入标签。普通分支 push 不会发布。
 
-当前矩阵为 Windows `x64`（64 位 Intel／AMD）、Windows `arm64`（Windows on ARM）和 macOS `arm64`（Apple Silicon）。每个构建先运行 `npm ci`、TypeScript／Vite 构建和 Electron 打包，再由发布任务把 DMG、ZIP、EXE 及更新元数据上传到 Release。
+当前矩阵为 Windows `x64`（64 位 Intel／AMD）、Windows `arm64`（Windows on ARM）和 macOS `arm64`（Apple Silicon）。每个构建先运行 `npm ci`、TypeScript／Vite 构建和 Electron 打包，再由发布任务把 Windows x64／ARM64 的 EXE 和 macOS ARM64 的 DMG 上传到 Release。GitHub 自动附带的 Source code 压缩包不属于 Actions 产物。
 
 仓库不需要额外发布密钥：工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，并声明了 `contents: write` 权限。首次使用前，在仓库 **Settings → Actions → General → Workflow permissions** 确认允许工作流读写仓库内容。
 
@@ -81,4 +80,4 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-等待三个构建任务和发布任务完成后，在仓库 **Releases** 页面复制下载链接。版本号由 tag 管理，tag 应与 `package.json` 的版本保持一致。当前未配置代码签名、公证、自动更新或 GitHub App；未签名的 macOS／Windows 安装包可能显示系统安全提示。后续加入签名时，再把证书和密码放入 GitHub Actions Secrets，不写入仓库。
+等待三个构建任务和发布任务完成后，在仓库 **Releases** 页面复制三个安装包的下载链接；源码包由 GitHub 自动附带。每次构建会从 tag 去掉前缀后同步 package 版本，例如 tag `v0.1.2` 会生成 `zhizhi-0.1.2-win-x64.exe`、`zhizhi-0.1.2-win-arm64.exe` 和 `zhizhi-0.1.2-mac-arm64.dmg`。版本号由 tag 管理，CI 会在临时工作区将 tag 写入 package 版本；不会修改仓库中的 package.json。当前未配置代码签名、公证、自动更新或 GitHub App；未签名的 macOS／Windows 安装包可能显示系统安全提示。后续加入签名时，再把证书和密码放入 GitHub Actions Secrets，不写入仓库。

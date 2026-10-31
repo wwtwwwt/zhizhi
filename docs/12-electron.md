@@ -24,7 +24,7 @@ Store支持注入SecretCodec，桌面入口用safeStorage加密／解密整个�
 - npm run dev:electron：5174的Vite＋3002的桌面服务，前端热更新；桌面／服务端变更重启命令。
 - npm run build:electron：TypeScript、Vite、桌面ESM和图标构建。
 - npm run pack：当前平台应用目录；npm run dist：当前平台安装包，不发布。
-- `.github/workflows/release.yml`：推送 `v*` tag 或手动运行时，构建三种目标并上传 GitHub Release；使用自动 `GITHUB_TOKEN`，不需要额外发布密钥。
-- macOS：DMG＋ZIP；Windows：NSIS；Linux：AppImage＋deb。当前只验证macOS arm64，其他平台／架构不能视为已验证。
+- `.github/workflows/release.yml`：推送 `v*` tag 或手动运行时，构建三种目标并只上传三个安装包（Windows x64／arm64 EXE、macOS arm64 DMG）到 GitHub Release；构建前从tag同步临时版本号；使用自动 `GITHUB_TOKEN`，不需要额外发布密钥。
+- macOS发布只保留DMG；Windows发布只保留NSIS EXE。Linux仍可在本地用electron-builder打包，但不在当前Actions发布矩阵中。当前只验证macOS arm64，其他平台／架构不能视为已验证。GitHub自动附带的Source code压缩包不由Actions生成。
 
 当前未配置开发者签名、公证和自动更新。用户负责UI视觉验收，桌面测试仅执行代码和DOM/API断言。

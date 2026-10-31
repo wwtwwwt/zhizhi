@@ -38,7 +38,7 @@ jobs:
             platform: win
             arch: arm64
           - name: macOS ARM64
-            runner: macos-14
+            runner: macos-15
             platform: mac
             arch: arm64
     runs-on: ${{ matrix.runner }}

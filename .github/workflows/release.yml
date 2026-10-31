@@ -28,10 +28,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows x86 (32-bit Intel)
+          - name: Windows x64 (64-bit Intel/AMD)
             runner: windows-latest
             platform: win
-            arch: ia32
+            arch: x64
           - name: Windows ARM64
             runner: windows-latest
             platform: win

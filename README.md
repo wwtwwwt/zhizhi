@@ -61,7 +61,7 @@ npm run dist
 ```sh
 npm run dist -- --mac --arm64
 npm run dist -- --mac --x64
-npm run dist -- --win --ia32
+npm run dist -- --win --x64
 npm run dist -- --win --arm64
 npm run dist -- --linux --x64
 ```
@@ -70,7 +70,7 @@ npm run dist -- --linux --x64
 
 工作流位于 `.github/workflows/release.yml`。它在推送 `v*` 标签时构建并发布 GitHub Release，也可以在 GitHub 的 **Actions → Build and release 枝知 → Run workflow** 手动输入标签。普通分支 push 不会发布。
 
-当前矩阵为 Windows `ia32`（32 位 x86／Intel）、Windows `arm64`（Windows on ARM）和 macOS `arm64`（Apple Silicon）。每个构建先运行 `npm ci`、TypeScript／Vite 构建和 Electron 打包，再由发布任务把 DMG、ZIP、EXE 及更新元数据上传到 Release。
+当前矩阵为 Windows `x64`（64 位 Intel／AMD）、Windows `arm64`（Windows on ARM）和 macOS `arm64`（Apple Silicon）。每个构建先运行 `npm ci`、TypeScript／Vite 构建和 Electron 打包，再由发布任务把 DMG、ZIP、EXE 及更新元数据上传到 Release。
 
 仓库不需要额外发布密钥：工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，并声明了 `contents: write` 权限。首次使用前，在仓库 **Settings → Actions → General → Workflow permissions** 确认允许工作流读写仓库内容。
 

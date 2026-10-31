@@ -1,6 +1,6 @@
 # 12 · Electron 桌面应用
 
-应用名称「枝知」，英文内部名 `zhizhi`，appId `com.zhizhi.app`。品牌素材来自 `src/assets/zhizhi-mark.svg`；构建自动生成平台图标。发布渠道使用 GitHub Releases＋tag 触发 Actions；工作流只构建 Windows ia32、Windows arm64 和 macOS arm64，暂未配置签名、公证或自动更新。
+应用名称「枝知」，英文内部名 `zhizhi`，appId `com.zhizhi.app`。品牌素材来自 `src/assets/zhizhi-mark.svg`；构建自动生成平台图标。发布渠道使用 GitHub Releases＋tag 触发 Actions；工作流只构建 Windows x64、Windows arm64 和 macOS arm64，暂未配置签名、公证或自动更新。
 
 ## 运行结构
 

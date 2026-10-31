@@ -46,7 +46,7 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 - 真实外部模型尚未端到端调用；协议能力以本机stub验证，不保证所有供应商参数兼容。当前无联网搜索或agent loop，后续另行设计。
 - 论文转换使用InkToMd；可用性、额度、正文和图片完整性依赖外部服务。代理规则见09，Clash本地端口7897。
 - 上下文JSON最多8MiB，另检查模型预算；重构最多500节点。估算不是实际tokenizer。
-- 当前为Electron桌面应用，保留Web开发预览，不是纯静态／PWA。已配置跨平台打包，本轮验证macOS arm64；GitHub tag触发Actions和Releases发布已配置，矩阵为Windows ia32／arm64和macOS arm64；使用GITHUB_TOKEN。签名／公证及自动更新后续再做。
+- 当前为Electron桌面应用，保留Web开发预览，不是纯静态／PWA。已配置跨平台打包，本轮验证macOS arm64；GitHub tag触发Actions和Releases发布已配置，矩阵为Windows x64／arm64和macOS arm64；使用GITHUB_TOKEN。签名／公证及自动更新后续再做。
 - 无账号、同步、全局画像、代码语法着色或流式断点续传。
 
 ## 续接规则

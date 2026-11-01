@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from '../server/store';
 import { createApp } from '../server/app';
+import { readLocalDocument } from '../server/local-document';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const development = !app.isPackaged;
@@ -44,7 +45,7 @@ async function start() {
     decode: text => safeStorage.decryptString(Buffer.from(JSON.parse(text).encrypted, 'base64')),
   });
   const token = randomBytes(32).toString('hex');
-  const service = createApp(store, {apiToken:token, staticDir:join(here,'../dist'), allowedOrigins:hot?['http://127.0.0.1:5174']:[]});
+  const service = createApp(store, {apiToken:token, pickDocument:async()=>{const selected=await dialog.showOpenDialog({title:'选择 Markdown 文件',properties:['openFile'],filters:[{name:'Markdown',extensions:['md','markdown']}]});return selected.canceled || !selected.filePaths[0] ? null : readLocalDocument(selected.filePaths[0]);}, staticDir:join(here,'../dist'), allowedOrigins:hot?['http://127.0.0.1:5174']:[]});
   active = service.active;
   server = createServer(service.app);
   // Reusing the assigned port preserves same-origin browser preferences between launches.

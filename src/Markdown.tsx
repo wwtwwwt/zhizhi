@@ -1,13 +1,15 @@
-import { Fragment, createElement, useMemo, useState } from 'react';
+import { Fragment, createElement, useCallback, useMemo, useState } from 'react';
 import { nodeTree } from '../shared/markdown';
 import type { Anchor, Ast } from '../shared/types';
 import katex from 'katex';
+import { ImageViewer } from './ImageViewer';
 import { safeImageUrl } from '../shared/documents';
 
 function DocumentImage({url, alt}: {url: string; alt: string}) {
-  const [failed,setFailed] = useState(false);
+  const [failed,setFailed] = useState(false), [viewing,setViewing] = useState(false);
+  const close=useCallback(()=>setViewing(false),[]);
   if (!safeImageUrl(url) || failed) return <span className="image-load-error" role="status" aria-label="图片无法加载"/>;
-  return <img className="markdown-image" src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={()=>setFailed(true)}/>;
+  return <><img tabIndex={0} role="img" title="点击查看图片" onClick={e=>{e.stopPropagation();setViewing(true);}} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();setViewing(true);}}} className="markdown-image" src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onError={()=>setFailed(true)}/>{viewing && <ImageViewer url={url} alt={alt} onClose={close}/>}</>;
 }
 
 function Formula({ value, display, streaming }: { value: string; display: boolean; streaming?: boolean }) {

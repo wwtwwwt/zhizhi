@@ -123,7 +123,7 @@ function Composer({ streamId, busy, onSend, compact = false }: { streamId?: stri
 type ConversationProps = { onImported?: (session: Session) => Promise<void>; streamId?: string; depth: number; onSend: (text: string, id?: string, options?: SendOptions) => Promise<boolean>; onBranch: (anchor: Anchor, depth: number) => void; onSelect: (selection: SelectionData, mode?: 'question' | 'note') => void; onDismissSelection: () => void };
 function Conversation(props: ConversationProps) {
   const { streamId, depth, onSend } = props; const state = useAppState(); const stream = streamId ? state.streams[streamId] : undefined;
-  const scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true), initiallyPositioned = useRef(false);
+  const scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true), initiallyPositioned = useRef(false), manualGeneration = useRef(false), lastGeneration = useRef('');
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
   const [navPreview, setNavPreview] = useState<{ message: Message; top: number } | null>(null);
   const showNavPreview = (message: Message, el: HTMLElement) => { const bounds = el.getBoundingClientRect(), parent = el.closest('.conversation')!.getBoundingClientRect(); setNavPreview({ message, top: Math.max(8, Math.min(bounds.top - parent.top - 16, parent.height - 180)) }); };
@@ -145,10 +145,20 @@ function Conversation(props: ConversationProps) {
   const jobs = Object.values(state.jobs).filter(j => j.streamId === streamId);
   const busy = jobs.some(j => j.kind === 'reply') || !!stream?.messages.some(m => ['queued','streaming'].includes(m.status));
   const empty = !streamId || stream?.messages.length === 0;
+  const generationKey = jobs.filter(j=>j.kind==='reply').map(j=>j.id).join(',') || stream?.messages.filter(m=>['queued','streaming'].includes(m.status)).map(m=>m.id).join(',') || '';
+  useLayoutEffect(()=>{if(generationKey && generationKey !== lastGeneration.current){lastGeneration.current=generationKey;manualGeneration.current=false;if(state.settings?.autoScroll !== false)nearBottom.current=true;}},[generationKey]);
+  const stopFollowing = () => { if (busy) manualGeneration.current = true; };
   const contentKey = `${stream?.messages.length}-${jobs.map(j => j.text.length).join('-')}`;
-  useLayoutEffect(() => { const el = scroll.current; if (el) { if (!initiallyPositioned.current && stream?.messages[0]?.document_name) { el.scrollTop = 0; nearBottom.current = false; } else if (nearBottom.current) el.scrollTop = el.scrollHeight; if (stream?.messages.length) initiallyPositioned.current = true; } syncPosition(); }, [contentKey]);
+  useLayoutEffect(() => { const el = scroll.current; if (el) { if (!initiallyPositioned.current && stream?.messages[0]?.document_name) { el.scrollTop = 0; nearBottom.current = false; } else if (state.settings?.autoScroll !== false && !manualGeneration.current && nearBottom.current) el.scrollTop = el.scrollHeight; if (stream?.messages.length) initiallyPositioned.current = true; } syncPosition(); }, [contentKey, state.settings?.autoScroll]);
+  useEffect(()=>{
+    const el=scroll.current, messages=el?.querySelector('.messages'); if(!el || !messages) return;
+    const observer=new ResizeObserver(()=>{
+      if(state.settings?.autoScroll !== false && !manualGeneration.current && nearBottom.current){el.scrollTop=el.scrollHeight;syncPosition();}
+    });
+    observer.observe(messages);return ()=>observer.disconnect();
+  },[streamId,empty,state.settings?.autoScroll]);
   return <section className={`conversation ${empty ? 'empty' : ''} ${depth ? 'branch-conversation' : ''}`}>
-    {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
+    {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={stopFollowing} onTouchMove={stopFollowing} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
       <div className="messages"> { !stream && <div className="loading-label">正在打开对话…</div>}{stream?.messages.map(message => <MessageView key={message.id} message={message} {...props}/>)}<div className="end-space"/></div>
     </div>}
     {!empty && <nav className="message-navigation" aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：${message.role === 'user' ? (message.document_name || state.settings?.nickname || '你') : 'AI'}`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => showNavPreview(message, e.currentTarget)} onFocus={e => showNavPreview(message, e.currentTarget)} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button>)}</nav>}

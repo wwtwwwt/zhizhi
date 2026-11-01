@@ -30,3 +30,5 @@ Store支持注入SecretCodec，桌面入口用safeStorage加密／解密整个�
 Release工作流使用原生Node.js 24运行时的官方Actions（checkout／setup-node／upload-artifact v7、download-artifact v8），发布任务固定ubuntu-24.04；macOS构建使用macos-15 ARM64。GitHub托管macOS ARM64容量排队提示由平台产生，工作流无法消除。
 
 当前未配置开发者签名、公证和自动更新。用户负责UI视觉验收，桌面测试仅执行代码和DOM/API断言。
+
+文档导入：主进程使用系统文件选择器，server/local-document.ts读取所选Markdown及同目录树中引用的图片；通过现有鉴权本地API提供给统一导入窗口，不向渲染进程开放任意路径读写。

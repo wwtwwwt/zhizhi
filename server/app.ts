@@ -11,7 +11,7 @@ import { fixture } from './providers/fake';
 const requestId = z.string().uuid();
 const question = z.string().trim().min(1, '请输入问题').max(30_000);
 const idParam = (req: Request) => String(req.params.id);
-export function createApp(store: Store, options: { paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[] } = {}) {
+export function createApp(store: Store, options: { paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
   const app = express();
   const active = new Map<string, AbortController>();
   app.disable('x-powered-by');
@@ -34,6 +34,8 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
   const modelInput = z.object({ name: z.string().trim().min(1).max(100), baseUrl: z.string().url().refine(s => /^https?:\/\//.test(s)), model: z.string().trim().min(1).max(200), supportsImages: z.boolean(), parameters, apiKey: z.string().max(10000).optional(), clearApiKey: z.boolean().optional() });
   const attachmentInput = z.array(z.object({ name: z.string().min(1).max(250), kind: z.enum(['text','image']), mime: z.string().max(100), data: z.string().max(8 * 1024 * 1024) })).max(6).default([]);
   const sendOptions = { modelId: z.string().max(100).optional(), attachments: attachmentInput };
+  app.get('/api/documents/picker', (_req,res) => res.json({available:!!options.pickDocument}));
+  app.post('/api/documents/picker', async (_req,res) => res.json(options.pickDocument ? await options.pickDocument() : null));
   app.get('/api/models', (_req, res) => res.json(store.models.list()));
   app.post('/api/models', (req, res) => res.json(store.models.save({ ...modelInput.parse(req.body), provider: 'openai' })));
   app.put('/api/models/:id', (req, res) => {
@@ -99,7 +101,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
   });
   app.get('/api/settings', (_req, res) => res.json(store.settings()));
   app.put('/api/settings', (req, res) => {
-    const data = z.object({ theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
+    const data = z.object({ theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), autoScroll:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
   });
   app.post('/api/fake/v1/chat/completions', async (req, res) => {
     const d = z.object({ messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.unknown())]) })), stream: z.literal(true), __fake: z.object({ kind: z.enum(['reply','branch','rewrite']), depth: z.number().int().min(0).max(500), delay: z.number().min(0).max(250), failure: z.enum(['error','disconnect']).optional() }) }).parse(req.body);

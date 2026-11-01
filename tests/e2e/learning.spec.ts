@@ -462,16 +462,22 @@ test('homepage document import handles missing local images, persists split docu
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();
   await expect(page.getByRole('heading',{name:'想从哪里开始？',exact:true})).toBeVisible();
-  await page.getByRole('button',{name:'导入 Markdown',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'导入 Markdown',exact:true});
+  await page.getByRole('button',{name:'导入文档',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'导入文档',exact:true});
   const doc={name:'测试讲义.md',mimeType:'text/markdown',buffer:Buffer.from('# 导入标题\n\n需要补充的先修知识。\n\n前文 ![示意图](assets/chart.png) 后文。\n\n最后一段。')};
   await dialog.getByLabel('Markdown 文件',{exact:true}).setInputFiles(doc);
-  await dialog.getByRole('button',{name:'导入',exact:true}).click();await expect(dialog.getByRole('alert')).toContainText('缺少图片资源');
+  await dialog.getByRole('button',{name:'导入 Markdown',exact:true}).click();await expect(dialog.getByRole('alert')).toContainText('缺少图片资源');
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII=','base64');
-  await dialog.getByLabel('文档图片',{exact:true}).setInputFiles({name:'chart.png',mimeType:'image/png',buffer:png});
-  await dialog.getByRole('button',{name:'导入',exact:true}).click();await expect(dialog).toHaveCount(0);
+  const folder=await import('node:fs/promises');const os=await import('node:os');const path=await import('node:path');const temp=await folder.mkdtemp(path.join(os.tmpdir(),'zhizhi-import-'));await folder.mkdir(path.join(temp,'assets'));await folder.writeFile(path.join(temp,'测试讲义.md'),doc.buffer);await folder.writeFile(path.join(temp,'assets/chart.png'),png);await dialog.getByLabel('文档文件夹',{exact:true}).setInputFiles(temp);
+  await dialog.getByRole('button',{name:'导入 Markdown',exact:true}).click();await expect(dialog).toHaveCount(0);await folder.rm(temp,{recursive:true,force:true});
   const docMessage=page.locator('.workspace .message-user').first();await expect(docMessage.locator('.message-role')).toHaveText('测试讲义.md');await expect(docMessage.locator('.message-avatar')).toHaveText('测试讲义.md');
   const image=docMessage.getByRole('img',{name:'示意图',exact:true});await expect(image).toBeVisible();await expect.poll(()=>image.evaluate(el=>(el as HTMLImageElement).naturalWidth)).toBe(1);
+  await image.click();const viewer=page.getByRole('dialog',{name:'图片查看器',exact:true});await expect(viewer).toBeVisible();
+  await viewer.getByRole('button',{name:'放大图片',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('125%');
+  await viewer.getByRole('button',{name:'缩小图片',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('100%');
+  await viewer.locator('.image-viewer-scroll').dispatchEvent('wheel',{deltaY:-100,ctrlKey:true});await expect(viewer.getByLabel('图片缩放比例')).toHaveText('110%');
+  await viewer.getByRole('button',{name:'重置图片缩放',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('100%');
+  await page.keyboard.press('Escape');await expect(viewer).toHaveCount(0);
   await expect(docMessage.locator('.content-block')).toHaveCount(6);await expect(page.locator('.workspace .message-assistant')).toHaveCount(0);
   const sid=await page.evaluate(()=>localStorage.getItem('lastSession'));const session=(await(await request.get('/api/sessions')).json()).find((s:any)=>s.id===sid);
   const context=await(await request.get(`/api/streams/${session.root_stream_id}/context`)).json();expect(context.used).toBeGreaterThan(0);
@@ -488,8 +494,8 @@ test('paper import entry accepts an arXiv link and displays imported document',a
     const result=await request.post('/api/documents/import',{data:{name:'论文标题.md',markdown:'# 论文标题\n\n论文正文。',resources:[]}});
     await route.fulfill({status:result.status(),contentType:'application/json',body:await result.text()});
   });
-  await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();await page.getByRole('button',{name:'导入论文链接',exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'导入论文',exact:true});await dialog.getByLabel('论文链接或 arXiv ID',{exact:true}).fill('https://arxiv.org/abs/1706.03762');await dialog.getByRole('button',{name:'导入',exact:true}).click();
+  await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();await page.getByRole('button',{name:'导入文档',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'导入文档',exact:true});await dialog.getByLabel('论文链接或 arXiv ID',{exact:true}).fill('https://arxiv.org/abs/1706.03762');await dialog.getByRole('button',{name:'导入论文',exact:true}).click();
   await expect(dialog).toHaveCount(0);await expect(page.locator('.workspace .message-role').first()).toHaveText('论文标题.md');expect(submitted).toBe('https://arxiv.org/abs/1706.03762');
 });
 
@@ -738,4 +744,46 @@ test('HTML paper tables and superscripts render, copy source and preserve branch
   await expect(blocks.nth(1).locator('sup mark')).toHaveText('∗'); await page.reload();
   await expect(blocks.nth(1).locator('sup mark')).toHaveText('∗'); await blocks.nth(1).locator('sup mark').click();
   await expect(page.locator('.top-layer .source-quote')).toContainText('∗'); expect(errors).toEqual([]);
+});
+
+test('unified import uses native folder images, offers conversion and matches assistant paragraph spacing',async({page,request})=>{
+  await request.put('/api/settings',{data:{fakeDelay:0,sendShortcut:'enter'}});
+  await page.route('**/api/documents/picker',async route=>{
+    await route.fulfill({json:route.request().method()==='GET'?{available:true}:{name:'native.md',markdown:'第一段。\n\n第二段。\n\n![图](assets/chart.png)',resources:[{path:'assets/chart.png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII='}]}});
+  });
+  await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();await page.getByRole('button',{name:'导入文档',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'导入文档',exact:true});
+  await expect(dialog.getByRole('link',{name:'前往转换'})).toHaveAttribute('href','https://www.inktomd.com/');
+  await expect(dialog.getByRole('button',{name:'选择文件夹',exact:true})).toHaveCount(0);
+  await dialog.getByRole('button',{name:'选择 Markdown 文件',exact:true}).click();await expect(dialog).toContainText('native.md');
+  await dialog.getByRole('button',{name:'导入 Markdown',exact:true}).click();await expect(dialog).toHaveCount(0);
+  await expect(page.locator('.workspace .markdown-image')).toBeVisible();
+  await page.getByRole('textbox',{name:'输入你的问题',exact:true}).fill('继续解释');await page.getByRole('button',{name:'发送问题',exact:true}).click();
+  const assistant=page.locator('.workspace .message-assistant [data-node].markdown p').first();await expect(assistant).toBeVisible();
+  const imported=page.locator('.workspace .message-user .markdown p').first();
+  expect(await imported.evaluate(el=>getComputedStyle(el).marginBottom)).toBe(await assistant.evaluate(el=>getComputedStyle(el).marginBottom));
+});
+
+test('generation auto-scroll persists and manual wheel cancels following for the entire current generation',async({page,request})=>{
+  await request.put('/api/settings',{data:{autoScroll:true,fakeDelay:15,sendShortcut:'enter'}});
+  await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();
+  await page.getByRole('textbox',{name:'输入你的问题',exact:true}).fill(Array.from({length:45},(_,i)=>`第${i}段用于滚动测试。`).join('\n\n'));
+  await page.getByRole('button',{name:'发送问题',exact:true}).click();await expect(page.locator('.workspace .streaming-draft')).toBeVisible();
+  const scroll=page.locator('.workspace .conversation-scroll');
+  await expect.poll(()=>scroll.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight)).toBeLessThan(110);
+  await scroll.dispatchEvent('wheel',{deltaY:-300});await scroll.evaluate(el=>{el.scrollTop-=300;});
+  await page.waitForTimeout(150);const top=await scroll.evaluate(el=>el.scrollTop);
+  await page.waitForTimeout(300);expect(await scroll.evaluate(el=>el.scrollTop)).toBeCloseTo(top,0);
+  // Returning to the bottom must not re-enable following in this generation.
+  await scroll.evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.waitForTimeout(100);const after=await scroll.evaluate(el=>el.scrollTop);
+  await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0,{timeout:30000});expect(await scroll.evaluate(el=>el.scrollTop)).toBeCloseTo(after,0);
+  await scroll.evaluate(el=>{el.scrollTop=0;});
+  await page.getByRole('textbox',{name:'输入你的问题',exact:true}).fill('下一轮恢复自动跟随');await page.getByRole('button',{name:'发送问题',exact:true}).click();
+  await expect(page.locator('.workspace .streaming-draft')).toBeVisible();await expect.poll(()=>scroll.evaluate(el=>el.scrollHeight-el.scrollTop-el.clientHeight)).toBeLessThan(110);
+  await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0);
+  await page.goto('/settings');await page.getByRole('tab',{name:'通用',exact:true}).click();
+  const toggle=page.getByRole('checkbox',{name:'生成时自动滚动',exact:true});await toggle.uncheck();
+  await expect.poll(async()=> (await(await request.get('/api/settings')).json()).autoScroll).toBe(false);
+  await page.reload();await page.getByRole('tab',{name:'通用',exact:true}).click();await expect(toggle).not.toBeChecked();
+  await request.put('/api/settings',{data:{autoScroll:true,fakeDelay:0}});
 });

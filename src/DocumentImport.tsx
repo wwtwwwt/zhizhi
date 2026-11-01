@@ -1,24 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileUp, FolderOpen, Link, LoaderCircle } from 'lucide-react';
+import { FileUp, FolderOpen, Link, LoaderCircle, ExternalLink } from 'lucide-react';
 import { WindowPanel } from './WindowPanel';
 import { api } from './client';
 import { imageNodes, resourcePath } from '../shared/documents';
+import type { DocumentImport as ImportData } from '../shared/documents';
 import type { Session } from '../shared/types';
 
 const imageFile = /\.(png|jpe?g|gif|webp|svg)$/i;
 const base64 = (file: File) => new Promise<string>((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = () => reject(new Error(`无法读取 ${file.name}`)); reader.readAsDataURL(file); });
-export function DocumentImport({ kind, onClose, onImported }: { kind: 'markdown' | 'paper'; onClose: () => void; onImported: (session: Session) => Promise<void> }) {
+export function DocumentImport({ onClose, onImported }: { onClose: () => void; onImported: (session: Session) => Promise<void> }) {
   const [file,setFile] = useState<File | null>(null), [resources,setResources] = useState<File[]>([]), [url,setUrl] = useState('');
+  const [native,setNative] = useState(false), [needsFolder,setNeedsFolder] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [busy,setBusy] = useState(false), [error,setError] = useState('');
   const folderRef = useRef<HTMLInputElement>(null), controller = useRef<AbortController | null>(null);
-  useEffect(() => { folderRef.current?.setAttribute('webkitdirectory',''); return () => controller.current?.abort(); }, []);
+  useEffect(() => { folderRef.current?.setAttribute('webkitdirectory',''); void api<{available:boolean}>('/documents/picker').then(result=>setNative(result.available)).catch(()=>{}); return () => controller.current?.abort(); }, []);
   const folder = (files: File[]) => {
     const docs = files.filter(f=>/\.(md|markdown)$/i.test(f.name));
     if (!file && docs.length === 1) setFile(docs[0]);
     else if (file) { const matching = docs.filter(f=>f.name === file.name); if (matching.length === 1) setFile(matching[0]); }
     setResources(files.filter(f=>imageFile.test(f.name))); setError('');
   };
-  const submit = async () => {
+  const chooseFile = async () => {
+    if (!native) { fileRef.current?.click(); return; }
+    setBusy(true); setError('');
+    try {
+      const doc = await api<ImportData | null>('/documents/picker','POST'); if (!doc) return;
+      setFile(new File([doc.markdown],doc.name,{type:'text/markdown'}));
+      setResources(doc.resources.map(resource=>{
+        const bytes = Uint8Array.from(atob(resource.data), c=>c.charCodeAt(0));
+        const image = new File([bytes],resource.path.split('/').at(-1)!);
+        Object.defineProperty(image,'webkitRelativePath',{value:resource.path}); return image;
+      })); setNeedsFolder(false);
+    } catch(e) {setError((e as Error).message);} finally {setBusy(false);}
+  };
+  const submit = async (kind: 'markdown'|'paper') => {
     setBusy(true); setError('');
     try {
       let session: Session;
@@ -43,7 +59,7 @@ export function DocumentImport({ kind, onClose, onImported }: { kind: 'markdown'
           if (fallback.length !== 1) { missing.push(ref); continue; }
           selected.set(wanted || relative,fallback[0]);
         }
-        if (missing.length) throw new Error(`缺少图片资源：${missing.slice(0,8).join('、')}。请补选图片文件或所在文件夹。`);
+        if (missing.length) { setNeedsFolder(true); throw new Error(`缺少图片资源：${missing.slice(0,8).join('、')}。请选择 Markdown 所在文件夹。`); }
         if ([...selected.values()].some(f=>f.size>5*1024*1024) || [...selected.values()].reduce((n,f)=>n+f.size,0)>12*1024*1024) throw new Error('单张图片最多 5 MiB，总计最多 12 MiB');
         session = await api<Session>('/documents/import','POST',{name:file.name,markdown,documentPath:path,resources:await Promise.all([...selected].map(async ([path,f])=>({path,data:await base64(f)})))});
       }
@@ -51,18 +67,20 @@ export function DocumentImport({ kind, onClose, onImported }: { kind: 'markdown'
     } catch(e) { if ((e as Error).name !== 'AbortError') setError((e as Error).message); }
     finally { setBusy(false); }
   };
-  return <WindowPanel title={kind === 'markdown' ? '导入 Markdown' : '导入论文'} onClose={onClose}><form className="document-import-form" onSubmit={e=>{e.preventDefault();void submit();}}>
-    {kind === 'markdown' ? <>
-      <label className="field">Markdown 文件<input aria-label="Markdown 文件" type="file" accept=".md,.markdown,text/markdown" disabled={busy} onChange={e=>{setFile(e.target.files?.[0] || null);setError('');}}/></label>
-      {file && <div className="import-filename">{file.name}</div>}
-      <div className="document-resource-actions"><label className="secondary-button"><FileUp size={14}/>添加图片<input aria-label="文档图片" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg" multiple hidden disabled={busy} onChange={e=>{const files=Array.from(e.target.files || []);setResources(prev=>[...new Map([...prev,...files].map(f=>[f.webkitRelativePath || f.name,f])).values()]);setError('');e.target.value='';}}/></label><label className="secondary-button"><FolderOpen size={14}/>选择文件夹<input ref={folderRef} aria-label="文档文件夹" type="file" multiple hidden disabled={busy} onChange={e=>folder(Array.from(e.target.files || []))}/></label><span>{resources.length ? `${resources.length} 张图片` : ''}</span></div>
-      <p className="import-hint">文档引用本地图片时，请一并选择图片或所在文件夹。</p>
-    </> : <label className="field">论文链接或 arXiv ID<input aria-label="论文链接或 arXiv ID" autoFocus value={url} disabled={busy} onChange={e=>{setUrl(e.target.value);setError('');}} placeholder="https://arxiv.org/abs/1706.03762"/><span className="import-hint">通过 InkToMd 转为 Markdown，可能需要一至两分钟。</span></label>}
-    {error && <p role="alert" className="import-error">{error}</p>}
-    <div className="document-import-actions"><button type="button" className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" disabled={busy || (kind === 'markdown' ? !file : !url.trim())}>{busy ? <><LoaderCircle size={14} className="import-spinner"/>导入中…</> : '导入'}</button></div>
-  </form></WindowPanel>;
+  return <WindowPanel title="导入文档" onClose={onClose}><div className="document-import-form document-import-grid">
+    <section className="import-markdown-panel"><h3><FileUp size={16}/>Markdown 文档</h3>
+      <input ref={fileRef} aria-label="Markdown 文件" type="file" accept=".md,.markdown,text/markdown" hidden disabled={busy} onChange={e=>{setFile(e.target.files?.[0] || null);setResources([]);setNeedsFolder(false);setError('');}}/>
+      <div className="import-file-row"><button className="secondary-button" disabled={busy} onClick={()=>void chooseFile()}>选择 Markdown 文件</button><span className="import-filename">{file?.name || '未选择文件'}</span></div>
+      <input ref={folderRef} id="document-resource-folder" aria-label="文档文件夹" type="file" multiple hidden disabled={busy} onChange={e=>folder(Array.from(e.target.files || []))}/>
+      {needsFolder && <div className="document-resource-actions"><button className="secondary-button" disabled={busy} onClick={()=>folderRef.current?.click()}><FolderOpen size={14}/>选择文件夹</button><span>选择 Markdown 所在文件夹以补全图片</span></div>}
+      <div className="document-import-actions"><button className="primary-button" disabled={busy || !file} onClick={()=>void submit('markdown')}>{busy ? <LoaderCircle size={14} className="import-spinner"/> : null}导入 Markdown</button></div>
+    </section>
+    <section className="import-paper-panel"><h3><Link size={16}/>论文链接</h3><form onSubmit={e=>{e.preventDefault();void submit('paper');}}><label className="field">论文链接或 arXiv ID<input aria-label="论文链接或 arXiv ID" value={url} disabled={busy} onChange={e=>{setUrl(e.target.value);setError('');}} placeholder="arxiv.org/abs/…"/></label><div className="document-import-actions"><button className="primary-button" disabled={busy || !url.trim()}>导入论文</button></div></form></section>
+    <section className="import-convert-panel"><h3><ExternalLink size={16}/>其他文档</h3><p className="import-hint">先使用 InkToMd 将 PDF、Word 等文档转换为 Markdown，再回来导入。</p><a className="secondary-button" href="https://www.inktomd.com/" target="_blank" rel="noreferrer">前往转换<ExternalLink size={13}/></a></section>
+    {busy && <p className="import-hint" role="status">正在导入…</p>}{error && <p role="alert" className="import-error">{error}</p>}
+  </div></WindowPanel>;
 }
 export function ImportActions({ onImported }: { onImported: (session:Session)=>Promise<void> }) {
-  const [kind,setKind] = useState<'markdown'|'paper'|null>(null);
-  return <><div className="suggestions import-actions"><button onClick={()=>setKind('markdown')}><FileUp size={16}/>导入 Markdown</button><button onClick={()=>setKind('paper')}><Link size={16}/>导入论文链接</button></div>{kind && <DocumentImport kind={kind} onClose={()=>setKind(null)} onImported={onImported}/>}</>;
+  const [open,setOpen] = useState(false);
+  return <><div className="suggestions import-actions"><button onClick={()=>setOpen(true)}><FileUp size={16}/>导入文档</button></div>{open && <DocumentImport onClose={()=>setOpen(false)} onImported={onImported}/>}</>;
 }

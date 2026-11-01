@@ -475,8 +475,15 @@ test('homepage document import handles missing local images, persists split docu
   await image.click();const viewer=page.getByRole('dialog',{name:'图片查看器',exact:true});await expect(viewer).toBeVisible();
   await viewer.getByRole('button',{name:'放大图片',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('125%');
   await viewer.getByRole('button',{name:'缩小图片',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('100%');
-  await viewer.locator('.image-viewer-scroll').dispatchEvent('wheel',{deltaY:-100,ctrlKey:true});await expect(viewer.getByLabel('图片缩放比例')).toHaveText('110%');
+  await viewer.locator('.image-viewer-scroll').dispatchEvent('wheel',{deltaY:-100});await expect(viewer.getByLabel('图片缩放比例')).toHaveText('110%');
+  const enlarged=viewer.getByRole('img',{name:'示意图',exact:true});const before=(await enlarged.boundingBox())!;
+  await page.mouse.move(before.x+before.width/2,before.y+before.height/2);await page.mouse.down();await page.mouse.move(before.x+before.width/2+60,before.y+before.height/2+40,{steps:5});
+  await expect(viewer.locator('.image-viewer-scroll')).toHaveClass(/dragging/);await page.mouse.up();
+  await expect(viewer).toBeVisible();await expect(viewer.locator('.image-viewer-scroll')).not.toHaveClass(/dragging/);
+  const shifted=(await enlarged.boundingBox())!;expect(shifted.x-before.x).toBeCloseTo(60,0);expect(shifted.y-before.y).toBeCloseTo(40,0);
+  await viewer.locator('.image-viewer-scroll').dispatchEvent('wheel',{deltaY:100});await expect(viewer.getByLabel('图片缩放比例')).toHaveText('100%');
   await viewer.getByRole('button',{name:'重置图片缩放',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('100%');
+  await expect(enlarged).toHaveAttribute('style',/translate\(0px, 0px\)/);
   await page.keyboard.press('Escape');await expect(viewer).toHaveCount(0);
   await expect(docMessage.locator('.content-block')).toHaveCount(6);await expect(page.locator('.workspace .message-assistant')).toHaveCount(0);
   const sid=await page.evaluate(()=>localStorage.getItem('lastSession'));const session=(await(await request.get('/api/sessions')).json()).find((s:any)=>s.id===sid);

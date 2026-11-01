@@ -228,5 +228,5 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 .image-viewer{position:fixed;inset:0;z-index:40000;background:#101014ec;display:flex;align-items:center;justify-content:center;padding:64px 24px 24px;outline:0;animation:appear .16s ease}
 .image-viewer-controls{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:5px;border:1px solid #ffffff30;background:#252528;color:#fff;padding:5px;border-radius:9px}
 .image-viewer-controls button{display:grid;place-items:center;padding:7px;border-radius:4px}.image-viewer-controls button:hover{background:#ffffff20}.image-viewer-controls output{min-width:52px;text-align:center;font-size:12px}
-.image-viewer-scroll{width:100%;height:100%;overflow:auto;overscroll-behavior:contain;text-align:center}
-.image-viewer-scroll img{display:block;object-fit:contain;margin:auto;height:auto;min-height:1px}
+.image-viewer-scroll{position:relative;width:100%;height:100%;overflow:hidden;overscroll-behavior:contain;touch-action:none;user-select:none}
+.image-viewer-scroll img{position:absolute;left:50%;top:50%;display:block;max-width:none;max-height:none;height:auto;min-height:1px;cursor:grab;transform-origin:center;touch-action:none;user-select:none;-webkit-user-drag:none}.image-viewer-scroll.dragging,.image-viewer-scroll.dragging img{cursor:grabbing}

@@ -4,10 +4,16 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkStringify from 'remark-stringify';
 import type { Ast, ParsedBlock, RenderMeta } from './types';
+import { resolveHtml, htmlElementSource } from './html';
 
 const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
 const writer = unified().use(remarkGfm).use(remarkMath).use(remarkStringify);
-export function printTree(tree: Ast): string { return writer.stringify(tree as never).trimEnd(); }
+export function printTree(tree: Ast): string {
+  const convert = (node: Ast): Ast => node.type === 'htmlElement' ? { type: 'html', value: htmlElementSource(node, child => {
+    return printTree({ type: 'root', children: [{ type: 'paragraph', children: [child] }] });
+  }) } : { ...node, children: node.children?.map(convert) };
+  return writer.stringify(convert(tree) as never).trimEnd();
+}
 export function parseTree(markdown: string): Ast {
   const tree = parser.parse(markdown) as unknown as Ast;
   // CommonMark rejects a closing ** after punctuation followed by a word.
@@ -83,7 +89,7 @@ export function parseTree(markdown: string): Ast {
   const resolve = (n: Ast) => {
     if (n.type === 'imageReference' || n.type === 'linkReference') { const d = definitions.get(n.identifier!.toLowerCase()); if (d) { n.type = n.type === 'imageReference' ? 'image' : 'link'; n.url = d.url; n.title = d.title; } }
     n.children?.forEach(resolve);
-  }; resolve(tree); return tree;
+  }; resolve(tree); resolveHtml(tree); return tree;
 }
 export function annotate(tree: Ast): string {
   let text = '';

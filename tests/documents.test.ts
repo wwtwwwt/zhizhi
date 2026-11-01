@@ -73,3 +73,15 @@ test('paper URL conversion uses full text, preserves relative images, normalizes
     expect(()=>importDocument(store,{name:'bad.md',markdown:'![x](javascript:alert)',resources:[]})).toThrow('协议');
   } finally {await close(server);await close(converter);store.db.close();rmSync(dir,{recursive:true,force:true});}
 });
+
+test('HTML document images resolve local resources and never enter model context', () => {
+  const dir=mkdtempSync(join(tmpdir(),'learn-html-document-')),store=new Store(dir);
+  try {
+    const session=importDocument(store,{name:'paper.md',markdown:'<table><tr><td>A</td><td><img src="figure.png" alt="Figure"></td></tr></table>\n\nAuthor<sup>∗</sup>',resources:[{path:'figure.png',data:png}]});
+    const message=store.stream(session.root_stream_id).messages[0];
+    const image=message.slots.find(s=>s.node.block_type==='image')!;
+    expect(image.node.markdown).toContain('/api/document-resources/');
+    expect(message.slots.some(s=>s.node.selection_text==='Author∗')).toBe(true);
+    expect(withoutImages(message.content_markdown)).not.toContain('/api/document-resources/');
+  } finally {store.db.close();rmSync(dir,{recursive:true,force:true});}
+});

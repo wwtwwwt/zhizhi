@@ -13,7 +13,7 @@
 | 前端 | React 19、TypeScript、Vite、原生 CSS、Lucide 图标 |
 | 本机服务 | Node.js 24、Express 5、Zod 输入校验 |
 | 数据 | Node 内置 node:sqlite，server/schema.sql 初始化 |
-| Markdown | unified、remark-parse／gfm／math／stringify，KaTeX 公式 |
+| Markdown | unified、remark-parse／gfm／math／stringify，htmlparser2，KaTeX 公式 |
 | 网络 | 原生 fetch 处理模型流；undici／ProxyAgent 处理论文转换 |
 | 测试 | Vitest、临时 SQLite、本机 HTTP stub、Playwright |
 
@@ -42,7 +42,7 @@ SQLite 是聊天、模型配置与偏好的权威数据源。前端按流ID缓�
 
 前端保留当前弹窗栈、选区、菜单、页面内草稿及生成草稿。localStorage 只保存最近会话、上次模型和共享窗口尺寸。刷新不恢复完整弹窗栈或输入草稿；网络断开结束模型流，服务重启恢复残留任务为 interrupted。
 
-服务端与前端共用 Markdown 解析规则。规范选区为 UTF-16 半开范围，DOM文本片段映射到节点 selection_text；公式按原子长度处理。高亮在 AST 渲染阶段生成，不直接修改 React 管理的正文结构。原始 HTML 不执行，链接与图片按协议规则处理。
+服务端与前端共用 Markdown 解析规则。规范选区为 UTF-16 半开范围，DOM文本片段映射到节点 selection_text；公式按原子长度处理。高亮在 AST 渲染阶段生成，不直接修改 React 管理的正文结构。原始 HTML 由 htmlparser2 转换为白名单 AST（shared/html.ts），仅输出允许的标签与结构属性，链接与图片仍按协议规则处理；不插入原始 HTML。
 
 ## 发布方向
 

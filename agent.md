@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-10-31（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-01（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -19,6 +19,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 - 手动编辑切块仅第一块为原槽新版本，其余独立；AI重构多段仍是同一个候选节点。
 - 删除当前／所有版本在菜单选择，确认窗口只二次确认；递归删除相关分支及无用资源，必要冻结祖先保留。普通确认可在设置关闭，全量清空始终确认。
 - 所有分支与WindowPanel共享并记住居中尺寸，四角缩放、不允许移动，仅下角显示L提示；堆叠方向up／left。
+- 原始HTML经htmlparser2白名单解析为共享AST，支持表格、上／下标与常用格式，保留源码复制及分支偏移，不执行脚本或任意属性；HTML图片沿用独立图片块流程。
 - 公式KaTeX排版，整体选择、复制LaTeX和追问。复制全块返回raw Markdown，部分块截断源码，不修补格式。
 - 外观支持light／dark／system，默认跟随系统；src/theme.ts监听系统主题，localStorage.appearance只用于启动缓存，SQLite settings.theme为权威偏好。
 - 通用设置自动保存，无保存按钮：偏好即时应用，文本防抖450ms；失焦／离开提交待保存项，串行合并写入。模型配置（含模拟模式）使用WindowPanel弹窗，点击保存才生效；取消／关闭不落库。
@@ -41,6 +42,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-01 HTML渲染回归：47项代码测试、生产构建及2项无截图浏览器测试通过，覆盖论文表格、上／下标、源码复制、分支刷新恢复、流式截断、安全属性和导入图片。
 
 2026-10-31功能回归：38项代码／协议测试及5项相关无截图Playwright测试通过；Electron源码入口与打包后macOS arm64应用均通过无截图smoke测试，涵盖实际safeStorage加密／重启解密、API鉴权、模拟流、偏好持久化和关窗退出。TypeScript／生产构建通过，仍有bundle体积提示。
 

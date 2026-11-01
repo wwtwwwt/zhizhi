@@ -47,3 +47,5 @@ Vitest使用临时SQLite和本机HTTP stub；Playwright先构建，用`.learnhel
 ## 维护和交接
 
 代码变更按影响运行必要测试；只有文档变更时检查源码对应、链接和差异，不重复执行无关UI测试。更新对应文档与根目录agent.md，记录已实现状态和实际验证结果。Git保存历史，不在文档中累积逐轮阶段计划或旧测试计数。
+
+HTML 渲染回归：tests/html.test.tsx 覆盖论文表格、上／下标、实体、源文本复制、分支偏移、流式截断、安全标签／属性与图片隔离；learning.spec.ts 的 HTML paper 测试验证 DOM 表格、复制及上标分支刷新恢复。

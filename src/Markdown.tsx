@@ -42,10 +42,23 @@ export function Markdown({ source, anchors = [], onBranch, activeBranchId, onAct
     return <Fragment key={key}>{parts}</Fragment>;
   };
   const render = (node: Ast, key: string): React.ReactNode => {
+    // Keep a canonical newline text node for selection offsets as well as the
+    // visual break; a bare <br> has no DOM text and shifts later branch anchors.
+    if (node.type === 'break') return <Fragment key={key}>{leaf(node, `${key}-text`)}<br/></Fragment>;
     if (node.type === 'image') return <span key={key} className="markdown-image-block"><DocumentImage key={node.url} url={node.url || ''} alt={node.alt || ''}/>{node.alt && <span className="image-caption">{leaf(node,`${key}-alt`)}</span>}</span>;
     if (node.value !== undefined) return leaf(node, key);
     const children = node.children?.map((n, i) => render(n, `${key}-${i}`));
     switch (node.type) {
+      case 'htmlElement': {
+        if (node.tagName === 'table') {
+          const rows: React.ReactNode[] = [], sections: React.ReactNode[] = [];
+          const flush = () => { if (rows.length) { sections.push(<tbody key={`rows-${sections.length}`}>{rows.splice(0)}</tbody>); } };
+          node.children?.forEach((child, i) => { if (child.tagName === 'tr') rows.push(children![i]); else { flush(); sections.push(children![i]); } });
+          flush();
+          return <div className="table-scroll" key={key}><table>{sections}</table></div>;
+        }
+        return createElement(node.tagName!, { key, ...node.properties }, children?.length ? children : undefined);
+      }
       case 'root': return <Fragment key={key}>{children}</Fragment>;
       case 'paragraph': return <p key={key}>{children}</p>;
       case 'heading': return createElement(`h${node.depth || 2}`, { key }, children);

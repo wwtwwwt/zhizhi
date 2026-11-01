@@ -208,3 +208,9 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 :root[data-theme=dark] .sidebar{background:#191919}
 :root[data-theme=dark] .message-nav-preview{background:#282828}
 :root[data-theme=dark] .message-nav-preview:after{background:linear-gradient(transparent,#282828)}
+/* Safe HTML from imported papers shares Markdown table and inline typography. */
+.markdown th{padding:5px 8px;border:1px solid var(--neutral-6,#e7e7e7);text-align:left;font-weight:600;white-space:pre-wrap}
+.markdown caption{padding:4px 0;text-align:left;color:var(--muted)}
+.markdown sup,.markdown sub{font-size:.75em;line-height:0;position:relative;vertical-align:baseline}
+.markdown sup{top:-.5em}.markdown sub{bottom:-.25em}
+.markdown details>summary{cursor:pointer}.markdown kbd{font-size:.85em;border:1px solid var(--neutral-6,#ddd);border-radius:3px;padding:1px 3px}

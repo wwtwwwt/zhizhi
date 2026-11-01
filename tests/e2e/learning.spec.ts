@@ -617,9 +617,10 @@ test('CJK punctuation bold renders, copies raw Markdown and preserves branch sel
   const body=page.locator('.workspace .message-user [data-node]').first();
   await expect(body.locator('strong')).toHaveText(['注意：','判断：']);await expect(body).toHaveText('注意：LLM... 判断：有真实行业场景时很值得做。');
   await expect(page.locator('.workspace .message-assistant [data-node]').first()).toBeVisible();
+  await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0);
   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{(window as any).__copied=value;}}});});
   await body.evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);getSelection()!.removeAllRanges();getSelection()!.addRange(r);});
-  await body.click({button:'right'});await page.getByRole('menuitem',{name:'复制为 Markdown',exact:true}).click();expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw);
+  await body.click({button:'right'});await page.getByRole('menuitem',{name:'复制为 Markdown',exact:true}).dispatchEvent('click');expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw);
   await branch(page,body,'判断：','解释这个判断');await closeBranch(page);await expect(body.locator('strong mark')).toHaveText('判断：');
   await page.reload();await expect(body.locator('strong mark')).toHaveText('判断：');await body.locator('mark').click();await expect(page.locator('.top-layer .source-quote')).toContainText('判断：');
 });
@@ -715,4 +716,26 @@ test('appearance autosaves, persists and follows system only when selected',asyn
   await page.emulateMedia({colorScheme:'dark'});await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
   await expect.poll(async()=>(await(await request.get('/api/settings')).json()).theme).toBe('system');
   expect((await request.put('/api/settings',{data:{theme:'invalid'}})).status()).toBe(400);
+});
+
+test('HTML paper tables and superscripts render, copy source and preserve branch anchors', async ({page,request}) => {
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await request.put('/api/settings',{data:{fakeDelay:0,sendShortcut:'enter'}});
+  await page.goto('/'); await page.getByRole('button',{name:'新的对话',exact:true}).click();
+  const raw='<table><thead><tr><th colspan="2">Method</th></tr></thead><tbody><tr><td>T2T</td><td>0.83</td></tr></tbody></table>\n\nShiqi He<sup>∗</sup>，H<sub>2</sub>O';
+  await page.getByRole('textbox',{name:'输入你的问题',exact:true}).fill(raw); await page.getByRole('button',{name:'发送问题',exact:true}).click();
+  const blocks=page.locator('.workspace .message-user [data-node]');
+  await expect(blocks).toHaveCount(2); await expect(blocks.first().locator('td')).toHaveText(['T2T','0.83']);
+  await expect(blocks.first().locator('th')).toHaveAttribute('colspan','2'); await expect(blocks.nth(1).locator('sup')).toHaveText('∗');
+  await expect(blocks.nth(1).locator('sub')).toHaveText('2');
+  await expect(page.locator('.workspace .message-assistant [data-node]').first()).toBeVisible();
+  await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0);
+  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{(window as any).__copied=value;}}});});
+  await blocks.first().evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);getSelection()!.removeAllRanges();getSelection()!.addRange(r);});
+  await blocks.first().click({button:'right'}); await page.getByRole('menuitem',{name:'复制为 Markdown',exact:true}).dispatchEvent('click');
+  expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw.split('\n\n')[0]);
+  await branch(page,blocks.nth(1),'∗','这个作者标记是什么意思？'); await closeBranch(page);
+  await expect(blocks.nth(1).locator('sup mark')).toHaveText('∗'); await page.reload();
+  await expect(blocks.nth(1).locator('sup mark')).toHaveText('∗'); await blocks.nth(1).locator('sup mark').click();
+  await expect(page.locator('.top-layer .source-quote')).toContainText('∗'); expect(errors).toEqual([]);
 });

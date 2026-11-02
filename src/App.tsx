@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
 import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, loadStream, notify, refreshSessions, runGeneration, useAppState } from './client';
 import { createPortal } from 'react-dom';
 import { useCenteredResize } from './useCenteredResize';
@@ -200,7 +200,7 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [toolsHost, message.slots]);
   return <article className={`message message-${message.role}`} data-message={message.id} tabIndex={-1}>
-    <div className={`message-avatar ${message.document_name ? 'document-avatar' : isNote ? 'note-avatar' : ''}`} title={message.document_name || undefined}>{message.document_name ? <span>{message.document_name}</span> : isNote ? <StickyNote size={13} aria-label="笔记" role="img"/> : message.role === 'user' ? <span>{userInitial(state.settings?.nickname)}</span> : <img src={brandMark} width={13} height={13} alt="AI"/>}</div>
+    <div className={`message-avatar ${message.document_name ? 'document-avatar' : isNote ? 'note-avatar' : ''}`} title={message.document_name || undefined}>{message.document_name ? <FileText size={13} aria-label="文档" role="img"/> : isNote ? <StickyNote size={13} aria-label="笔记" role="img"/> : message.role === 'user' ? <span>{userInitial(state.settings?.nickname)}</span> : <img src={brandMark} width={13} height={13} alt="AI"/>}</div>
     <div className="message-main"><div className="message-role">{message.document_name || (message.role === 'user' ? (isNote ? '笔记' : state.settings?.nickname || '你') : '枝知')}{message.role === 'assistant' && <span>{message.model_label || ''}</span>}</div>
       <div className="message-document" ref={documentRef}>
       <div className="message-content">{message.attachments && message.attachments.length > 0 && <div className="message-attachments">{message.attachments.map(a => <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" title={a.name}>{a.kind === 'image' ? <img src={`/api/attachments/${a.id}`} alt={a.name}/> : <span>TXT</span>}<small>{a.name}</small></a>)}</div>}{(job?.reasoning || message.reasoning_text) && <ReasoningPanel text={job?.reasoning || message.reasoning_text || ''} simulated={message.model_label === '模拟模式'} startedAt={job?.reasoningStartedAt} endedAt={job?.reasoningEndedAt}/>}{message.slots.map(slot => <BlockView key={slot.id} messageId={message.id} slot={slot} role={message.role} toolsHost={toolsHost} {...props}/>)}

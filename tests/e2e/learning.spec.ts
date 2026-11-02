@@ -473,7 +473,7 @@ test('homepage document import handles missing local images, persists split docu
   const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII=','base64');
   const folder=await import('node:fs/promises');const os=await import('node:os');const path=await import('node:path');const temp=await folder.mkdtemp(path.join(os.tmpdir(),'zhizhi-import-'));await folder.mkdir(path.join(temp,'assets'));await folder.writeFile(path.join(temp,'测试讲义.md'),doc.buffer);await folder.writeFile(path.join(temp,'assets/chart.png'),png);await dialog.getByLabel('文档文件夹',{exact:true}).setInputFiles(temp);
   await dialog.getByRole('button',{name:'导入 Markdown',exact:true}).click();await expect(dialog).toHaveCount(0);await folder.rm(temp,{recursive:true,force:true});
-  const docMessage=page.locator('.workspace .message-user').first();await expect(docMessage.locator('.message-role')).toHaveText('测试讲义.md');await expect(docMessage.locator('.message-avatar')).toHaveText('测试讲义.md');
+  const docMessage=page.locator('.workspace .message-user').first();await expect(docMessage.locator('.message-role')).toHaveText('测试讲义.md');await expect(docMessage.locator('.message-avatar').getByRole('img', { name: '文档', exact: true })).toBeVisible();
   const image=docMessage.getByRole('img',{name:'示意图',exact:true});await expect(image).toBeVisible();await expect.poll(()=>image.evaluate(el=>(el as HTMLImageElement).naturalWidth)).toBe(1);
   await image.click();const viewer=page.getByRole('dialog',{name:'图片查看器',exact:true});await expect(viewer).toBeVisible();
   await viewer.getByRole('button',{name:'放大图片',exact:true}).click();await expect(viewer.getByLabel('图片缩放比例')).toHaveText('125%');

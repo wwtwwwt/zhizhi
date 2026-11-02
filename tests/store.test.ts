@@ -22,15 +22,16 @@ test('overlap rejected, adjacent accepted, request replay atomic, grapheme bound
   expect(() => s.createBranch(node.id, 4, 6, '👩', '解释', uuid())).toThrow('重新选择');
   expect(s.all('SELECT * FROM branches')).toHaveLength(2);
 });
-test('frozen ancestor prefix excludes later blocks and siblings; includes each quote', () => {
+test('frozen ancestor includes whole source message but excludes later messages and siblings', () => {
   const { stream, node } = root(); const start = node.selection_text.indexOf('梯度');
-  const a = s.createBranch(node.id, start, start + 4, '梯度下降', 'A问题', uuid()); finish(a, 'A回答');
+  finish(s.appendQuestion(stream, '不应进入分支的后续问题', uuid()), '不应进入分支的后续回答');
+  const a = s.createBranch(node.id, start, start + 4, '梯度下降', 'A问题', uuid()); finish(a, 'A回答\n\nA回答的后续段落');
   const b = s.createBranch(node.id, 0, 2, '先解', '兄弟秘密', uuid()); finish(b, '兄弟回答');
   const childNode = s.stream(a.streamId).messages[1].slots[0].node;
   const c = s.createBranch(childNode.id, 0, 2, 'A回', 'C问题', uuid()); finish(c, 'C回答');
   const text = JSON.stringify(s.context(c.streamId));
   expect(text).toContain('我的问题'); expect(text).toContain('梯度下降'); expect(text).toContain('A回');
-  expect(text).not.toContain('后面的独立内容'); expect(text).not.toContain('兄弟秘密');
+  expect(text).toContain('后面的独立内容'); expect(text).toContain('A回答的后续段落'); expect(text).not.toContain('兄弟秘密'); expect(text).not.toContain('不应进入分支');
   const frozen = JSON.stringify(s.context(a.streamId));
   const rewrite = s.rewrite(node.id, uuid()); const proposal = finish(rewrite, '重新解释梯度。');
   const slot = s.need('block_slots', node.slot_id); s.decideProposal(proposal.proposalId, true, node.id);
@@ -376,4 +377,23 @@ test('empty stops create no blocks; errors and interruptions do not enter contex
     expect(s.stream(session.root_stream_id).messages[1].slots).toHaveLength(0);
     expect(JSON.stringify(s.context(session.root_stream_id))).not.toContain('不应纳入');
   }
+});
+
+test('rewrite includes whole target message, excludes later conversation, and snapshots selected model', () => {
+  const { stream, node } = root('目标内容\n\n同消息后半段');
+  const branch = s.createBranch(node.id, 0, 2, '目标', '追问资料', uuid()); finish(branch, '解释资料');
+  finish(s.appendQuestion(stream, '之后的消息不应纳入', uuid()), '之后的答案不应纳入');
+  const model = s.models.save({ provider: 'openai', name: '选择的模型', model: 'selected', baseUrl: 'http://localhost/v1', supportsImages: false, parameters: [{ key: 'context_length', value: 32000, enabled: true }], apiKey: 'stub' });
+  const requestId = uuid();
+  const rewrite = s.rewrite(node.id, requestId, model.id);
+  const generation = s.need('generations', rewrite.generationId);
+  const messages = JSON.parse(generation.context_json);
+  expect(messages.map((m: {role:string}) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+  expect(messages[2].content).toBe('目标内容\n\n同消息后半段');
+  expect(messages[3].content).toContain('目标原文：\n目标内容');
+  expect(messages[3].content).toContain('追问资料');
+  expect(generation.context_json).not.toContain('不应纳入');
+  expect(JSON.parse(generation.settings_json).modelConfig.id).toBe(model.id);
+  expect(s.rewrite(node.id, requestId, model.id).generationId).toBe(rewrite.generationId);
+  expect(() => s.rewrite(node.id, requestId, 'fake')).toThrow('请求标识');
 });

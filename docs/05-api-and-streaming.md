@@ -18,7 +18,7 @@
 | POST /slots/:id/after | markdown、expectedActiveNodeId，在下方插入独立块 |
 | DELETE /slots/:id | expectedActiveNodeId、必填scope（all／current），返回被删streamIds |
 | PATCH /slots/:id/active-version | nodeId、expectedActiveNodeId，切版后返回ok；客户端重载流 |
-| POST /nodes/:id/rewrites | requestId，捕获后代上下文并创建重构任务 |
+| POST /nodes/:id/rewrites | requestId、可选modelId（界面传目标流输入框所选模型），捕获后代上下文并创建重构任务 |
 | POST /rewrite-proposals/:id/accept | expectedActiveNodeId，采用候选 |
 | POST /rewrite-proposals/:id/reject | 保留原文，拒绝候选 |
 | GET /generations/:id/events | 启动queued任务并订阅SSE，单任务只执行一次 |

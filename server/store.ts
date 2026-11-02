@@ -107,8 +107,7 @@ export class Store {
     const refs: ContextRef[] = JSON.parse(stream.context_snapshot_json);
     for (const message of this.all("SELECT * FROM messages WHERE stream_id=? AND status IN ('complete','stopped') ORDER BY ordinal", streamId)) {
       const slots = this.visibleSlots(message.id);
-      const ids: string[] = [];
-      for (const s of slots) { ids.push(s.active_node_id); if (s.active_node_id === throughNode) break; }
+      const ids: string[] = slots.map(s => s.active_node_id);
       if (ids.length) refs.push({ role: message.role, nodeIds: ids, attachmentMessageId: attachmentInfo(this, message.id).length ? message.id : undefined });
       if (throughNode && ids.includes(throughNode)) return refs;
     }
@@ -246,8 +245,8 @@ export class Store {
     for (const resource of this.all('SELECT id FROM document_resources'))
       if (!markdown.some(text=>text.includes(`/api/document-resources/${resource.id}`))) this.run('DELETE FROM document_resources WHERE id=?',resource.id);
   }
-  rewrite(nodeId: string, requestId: string): GenerationResult {
-    const signature = JSON.stringify(['rewrite', nodeId]); const old = this.replay(requestId, signature); if (old) return this.result(old);
+  rewrite(nodeId: string, requestId: string, modelId?: string): GenerationResult {
+    const signature = JSON.stringify(['rewrite', nodeId, modelId]); const old = this.replay(requestId, signature); if (old) return this.result(old);
     return this.tx(() => {
       const node = this.need('content_nodes', nodeId), slot = this.need('block_slots', node.slot_id), message = this.need('messages', slot.message_id);
       this.assertVisible(slot);
@@ -269,7 +268,7 @@ export class Store {
         }
       }
       const context = rewriteContext(this.resolve(this.refs(message.stream_id, nodeId)), withoutImages(node.markdown), parts.join('\n\n'));
-      return this.result(this.generation(message.stream_id, null, nodeId, 'rewrite', context, requestId, signature));
+      return this.result(this.generation(message.stream_id, null, nodeId, 'rewrite', context, requestId, signature, this.models.get(modelId)));
     });
   }
   finish(gid: string, markdown: string): Record<string, string> {

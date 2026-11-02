@@ -5,6 +5,9 @@ import { estimateText, modelBudget, type AttachmentInput, type SendOptions } fro
 
 type Draft = { text: string; attachments: AttachmentInput[]; modelId?: string };
 const drafts = new Map<string, Draft>();
+// Model selection outlives clearing a submitted draft and remains local to each composer.
+const selectedModels = new Map<string, string>();
+export function composerModelId(draftKey: string) { return selectedModels.get(draftKey); }
 export function SendComposer({ draftKey, streamId, sourceNodeId, quote = '', busy, label, placeholder, sendLabel = '发送问题', onSend, onStop, autoFocus = false, noteMode = false, onCancel }: { noteMode?: boolean; onCancel?: () => void; draftKey: string; streamId?: string; sourceNodeId?: string; quote?: string; busy?: boolean; label: string; placeholder?: string; sendLabel?: string; onSend: (text: string, options: SendOptions) => Promise<boolean>; onStop?: () => void; autoFocus?: boolean }) {
   const state = useAppState(), initial = drafts.get(draftKey);
   const rememberedModel = (() => { try { return localStorage.getItem('lastModelId') || 'fake'; } catch { return 'fake'; } })();
@@ -12,6 +15,7 @@ export function SendComposer({ draftKey, streamId, sourceNodeId, quote = '', bus
   const [submitting,setSubmitting] = useState(false), [reading,setReading] = useState(false), [open,setOpen] = useState(false), [used,setUsed] = useState(80);
   const input = useRef<HTMLTextAreaElement>(null), imageInput = useRef<HTMLInputElement>(null), textInput = useRef<HTMLInputElement>(null), selector = useRef<HTMLDivElement>(null);
   const model = state.models.find(m=>m.id===modelId) || state.models[0];
+  useLayoutEffect(() => { if (!noteMode && model) selectedModels.set(draftKey, model.id); }, [draftKey, model?.id, noteMode]);
   useEffect(()=>{ drafts.set(draftKey,{text,attachments,modelId:model?.id}); },[draftKey,text,attachments,model?.id]);
   const stream = streamId ? state.streams[streamId] : undefined;
   useEffect(()=>{let active=true;if(noteMode || !streamId){setUsed(80);return;} void api<{used:number}>(`/streams/${streamId}/context${sourceNodeId?`?sourceNodeId=${sourceNodeId}`:''}`).then(result=>{if(active)setUsed(result.used);}).catch(()=>{});return()=>{active=false;};},[streamId,sourceNodeId,stream,noteMode]);

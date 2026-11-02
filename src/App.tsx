@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useCenteredResize } from './useCenteredResize';
 import { layoutSideItems, type Corner } from '../shared/workspace-layout';
 import { ReasoningPanel } from './ReasoningPanel';
-import { SendComposer } from './SendComposer';
+import { SendComposer, composerModelId } from './SendComposer';
 import { ImportActions } from './DocumentImport';
 import { useTheme } from './theme';
 import { SettingsPage } from './SettingsPage';
@@ -333,7 +333,7 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
   // mouseup belongs to the document: the pointer may be outside the block
   // while both native selection endpoints remain inside it.
   useEffect(() => { document.addEventListener('mouseup', selected); return () => document.removeEventListener('mouseup', selected); });
-  const rewrite = async () => { setStarting(true); try { const result = await api<GenerationResult>(`/nodes/${node.id}/rewrites`, 'POST', { requestId: crypto.randomUUID() }); void runGeneration(result, 'rewrite', node.id); } catch (e) { notify((e as Error).message); } finally { setStarting(false); } };
+  const rewrite = async () => { setStarting(true); try { const result = await api<GenerationResult>(`/nodes/${node.id}/rewrites`, 'POST', { requestId: crypto.randomUUID(), modelId: composerModelId(streamId || 'new') }); void runGeneration(result, 'rewrite', node.id); } catch (e) { notify((e as Error).message); } finally { setStarting(false); } };
   const changeVersion = async (index: number) => { try { await api(`/slots/${slot.id}/active-version`, 'PATCH', { nodeId: slot.versions[index].id, expectedActiveNodeId: node.id }); await loadStream(streamId!); } catch (e) { notify((e as Error).message); } };
   const blockMenu = <div className={`block-menu ${contextMenu ? 'context-block-menu' : ''}`} style={contextMenu ? { position:'fixed', left:contextMenu.x, top:contextMenu.y } : undefined} ref={menuRef} role="menu" aria-label={contextMenu ? '内容右键菜单' : '块操作菜单'} onMouseDown={e => e.preventDefault()} onKeyDown={e => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]; const at = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[(at + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }

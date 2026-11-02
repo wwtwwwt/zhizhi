@@ -134,7 +134,7 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 
 .block-menu.context-block-menu{z-index:15000;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;margin:0}.block-menu button[aria-disabled=true]{opacity:.4;cursor:default}.context-block-menu .menu-separator[role=separator]{margin:4px 0}
 
-.message-content .markdown,.message-content .streaming-draft.streaming-markdown,.rewrite-preview .markdown{font-size:var(--reading-font-size,14px)}
+.message-content .markdown,.message-content .streaming-draft.streaming-markdown,.rewrite-preview .markdown{font-size:var(--reading-font-size,15px)}
 
 /* Settings: one content measure, aligned rows and compact navigation. */
 .settings-page.settings-layout{width:calc(100% - 40px);max-width:940px;margin:16px auto;padding-bottom:24px;overflow:auto}
@@ -230,3 +230,12 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 .image-viewer-controls button{display:grid;place-items:center;padding:7px;border-radius:4px}.image-viewer-controls button:hover{background:#ffffff20}.image-viewer-controls output{min-width:52px;text-align:center;font-size:12px}
 .image-viewer-scroll{position:relative;width:100%;height:100%;overflow:hidden;overscroll-behavior:contain;touch-action:none;user-select:none}
 .image-viewer-scroll img{position:absolute;left:50%;top:50%;display:block;max-width:none;max-height:none;height:auto;min-height:1px;cursor:grab;transform-origin:center;touch-action:none;user-select:none;-webkit-user-drag:none}.image-viewer-scroll.dragging,.image-viewer-scroll.dragging img{cursor:grabbing}
+/* Increased reading contrast; preserve the compact interface type scale. */
+:root:not([data-theme=dark]){--neutral-0:#171717;--neutral-1:#242424;--neutral-2:#474747}
+:root:not([data-theme=dark]) .workspace,:root:not([data-theme=dark]) .branch-dialog{background:#fdfdfd}
+.session-link,.model-row strong{color:var(--neutral-1,#242424)}
+.block-menu{max-width:min(320px,calc(100vw - 16px));min-width:195px}
+.menu-submenu{position:relative}.menu-submenu>button,.block-delete-submenu>button{display:flex;align-items:center;gap:7px;width:100%;text-align:left;padding:5px 7px;border-radius:4px;font-size:11px}
+.menu-submenu>button>svg:last-child{margin-left:auto}
+.block-delete-submenu{position:fixed;left:0;top:0;min-width:166px;padding:3px;background:var(--neutral-8,#fff);border:1px solid var(--line);border-radius:5px;box-shadow:0 6px 24px #0002;z-index:30}
+.menu-submenu:focus-within>button,.menu-submenu>button:hover,.block-delete-submenu button:hover{background:var(--neutral-7,#f1f1f1)}

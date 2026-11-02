@@ -309,3 +309,34 @@ test('fresh schema has no historical tables; current preferences and data surviv
   expect(()=>s.run('UPDATE content_nodes SET selection_text=? WHERE id=?','不能修改',node.id)).toThrow('IMMUTABLE_NODE');
   expect(s.all('PRAGMA foreign_key_check')).toHaveLength(0);
 });
+
+test('deleting historical block versions preserves current version and its branches',()=>{
+  const {stream,node}=root('甲乙丙丁');
+  const old=s.createBranch(node.id,0,1,'甲','旧版问题',uuid());finish(old,'旧版回答');
+  s.changeBlock(node.slot_id,node.id,'新甲乙丙丁');
+  const active=s.stream(stream).messages[1].slots[0].node;
+  const current=s.createBranch(active.id,0,1,'新','新版问题',uuid());finish(current,'新版回答');
+  const result=s.changeBlock(node.slot_id,active.id,undefined,'history');
+  expect(result.streamIds).toContain(old.streamId);expect(()=>s.stream(old.streamId)).toThrow();
+  const slot=s.stream(stream).messages[1].slots[0];expect(slot.versions).toHaveLength(1);expect(slot.node.id).toBe(active.id);
+  expect(s.stream(current.streamId).messages).toHaveLength(2);expect(s.all('PRAGMA foreign_key_check')).toHaveLength(0);
+});
+
+test('message deletion removes all version branches while preserving frozen context used by a later sibling',()=>{
+  const {stream,node}=root('甲乙丙丁\n\n后续块');
+  const message=s.stream(stream).messages[1];
+  const branch=s.createBranch(node.id,0,1,'甲','子分支',uuid());finish(branch,'子答案');
+  const child=s.stream(branch.streamId).messages[1].slots[0].node;
+  const nested=s.createBranch(child.id,0,1,'子','孙分支',uuid());finish(nested,'孙答案');
+  const next=s.appendQuestion(stream,'后续提问',uuid());finish(next,'下一消息');
+  const later=s.stream(stream).messages.at(-1)!.slots[0].node;
+  const sibling=s.createBranch(later.id,0,1,'下','独立分支',uuid());finish(sibling,'独立答案');
+  const frozen=JSON.stringify(s.context(sibling.streamId));
+  const result=s.deleteMessage(message.id);expect(result.streamIds).toEqual(expect.arrayContaining([branch.streamId,nested.streamId]));
+  expect(s.stream(stream).messages.some(m=>m.id===message.id)).toBe(false);
+  expect(JSON.stringify(s.context(stream))).not.toContain('甲乙丙丁');
+  expect(JSON.stringify(s.context(sibling.streamId))).toBe(frozen);
+  expect(()=>s.stream(branch.streamId)).toThrow();expect(()=>s.stream(nested.streamId)).toThrow();
+  s.deleteBranch(sibling.branch!.id);expect(s.one('SELECT id FROM messages WHERE id=?',message.id)).toBeUndefined();
+  expect(s.all('PRAGMA foreign_key_check')).toHaveLength(0);
+});

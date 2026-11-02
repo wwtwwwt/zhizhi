@@ -70,7 +70,7 @@ test('storage API reports local bytes and requires explicit reset confirmation; 
     const info=await(await fetch(base+'/api/storage')).json();expect(info.mode).toBe('local');expect(info.path).toBe(dir);expect(info.totalBytes).toBeGreaterThan(0);expect(info.sessions).toBe(1);expect(info.models).toBe(1);expect(JSON.stringify(info)).not.toContain('private-test-key');
     expect((await fetch(base+'/api/storage',{method:'DELETE',headers:{'Content-Type':'application/json'},body:'{}'})).status).toBe(400);expect(store.sessions()).toHaveLength(1);
     const result=await fetch(base+'/api/storage',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:'DELETE_ALL_DATA'})});expect(result.ok).toBe(true);
-    expect(store.sessions()).toHaveLength(0);expect(store.all('SELECT * FROM generations')).toHaveLength(0);expect(store.models.list().map(m=>m.id)).toEqual(['fake']);expect(store.models.key(model.id)).toBe('');expect(store.settings()).toMatchObject({nickname:'你',fontSize:14,sendShortcut:'enter',});expect(store.all('PRAGMA foreign_key_check')).toHaveLength(0);
+    expect(store.sessions()).toHaveLength(0);expect(store.all('SELECT * FROM generations')).toHaveLength(0);expect(store.models.list().map(m=>m.id)).toEqual(['fake']);expect(store.models.key(model.id)).toBe('');expect(store.settings()).toMatchObject({nickname:'你',fontSize:15,sendShortcut:'enter',});expect(store.all('PRAGMA foreign_key_check')).toHaveLength(0);
     expect((await fetch(base+'/api/health')).ok).toBe(true);
     expect(store.models.list()).toHaveLength(1);
     const bad=await fetch(base+'/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({fontSize:100})});expect(bad.status).toBe(400);

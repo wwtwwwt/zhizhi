@@ -17,7 +17,7 @@ export function SettingsPage({onBack}:{onBack:()=>void}) {
 }
 function GeneralSettings(){
   const state=useAppState();
-  const [values,setValues]=useState(()=>({autoScroll:state.settings?.autoScroll !== false,theme:state.settings?.theme || 'system',nickname:state.settings?.nickname || '你',stackDirection:state.settings?.stackDirection || 'up',fontSize:state.settings?.fontSize || 14,sendShortcut:state.settings?.sendShortcut || 'enter',confirmDeletion:state.settings?.confirmDeletion !== false}));
+  const [values,setValues]=useState(()=>({autoScroll:state.settings?.autoScroll !== false,theme:state.settings?.theme || 'system',nickname:state.settings?.nickname || '你',stackDirection:state.settings?.stackDirection || 'up',fontSize:state.settings?.fontSize || 15,sendShortcut:state.settings?.sendShortcut || 'enter',confirmDeletion:state.settings?.confirmDeletion !== false}));
   const {autoScroll,theme,nickname,stackDirection:direction,fontSize,sendShortcut:shortcut,confirmDeletion}=values;
   const payload={...values,...(!nickname.trim()?{nickname:state.settings?.nickname || '你'}:{nickname:nickname.trim()})};
   const delay=useRef(450);

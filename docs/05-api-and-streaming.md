@@ -69,3 +69,5 @@ fake经loopback调用内置端点，复用相同adapter和SSE解析器。固定�
 400为无效输入、模型配置或预算问题；404为资源不存在；409为选区重叠、忙状态、版本或请求冲突；422为选区／公式校验或空笔记；502为上游和协议错误，504为模型等待超时。具体以错误code和message为准。
 
 API面向本机应用，不支持任意跨域访问。模型协议已在本机stub验证；没有用真实外部模型做端到端验证，不保证每家供应商支持全部可选参数。
+
+`DELETE /api/messages/:id`删除整条消息及其版本分支，返回`{streamIds,parentStreamId}`；生成中的流拒绝删除，客户端清除已删流缓存并重新读取父流。`DELETE /api/slots/:id`的scope支持all／current／history，history保留当前版本。

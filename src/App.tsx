@@ -85,7 +85,7 @@ export function App() {
       await loadStream(selection.streamId); await refreshSessions(); setSelection(null); window.getSelection()?.removeAllRanges(); return true;
     } catch (e) { notify((e as Error).message); return false; } finally { setCreating(false); }
   };
-  return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 14}px` } as CSSProperties} className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+  return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar" inert={stack.length > 0 || !!manage}>
       <button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span className="brand-icon"><img src={brandMark} width={22} height={22} alt=""/></span><span>枝知<small>ZHIZHI</small></span></button>
       <button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span><span className="key-hint" aria-hidden="true">↗</span></button>
@@ -203,7 +203,7 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
     <div className={`message-avatar ${message.document_name ? 'document-avatar' : isNote ? 'note-avatar' : ''}`} title={message.document_name || undefined}>{message.document_name ? <span>{message.document_name}</span> : isNote ? <StickyNote size={13} aria-label="笔记" role="img"/> : message.role === 'user' ? <span>{userInitial(state.settings?.nickname)}</span> : <img src={brandMark} width={13} height={13} alt="AI"/>}</div>
     <div className="message-main"><div className="message-role">{message.document_name || (message.role === 'user' ? (isNote ? '笔记' : state.settings?.nickname || '你') : '枝知')}{message.role === 'assistant' && <span>{message.model_label || ''}</span>}</div>
       <div className="message-document" ref={documentRef}>
-      <div className="message-content">{message.attachments && message.attachments.length > 0 && <div className="message-attachments">{message.attachments.map(a => <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" title={a.name}>{a.kind === 'image' ? <img src={`/api/attachments/${a.id}`} alt={a.name}/> : <span>TXT</span>}<small>{a.name}</small></a>)}</div>}{(job?.reasoning || message.reasoning_text) && <ReasoningPanel text={job?.reasoning || message.reasoning_text || ''} simulated={message.model_label === '模拟模式'} startedAt={job?.reasoningStartedAt} endedAt={job?.reasoningEndedAt}/>}{message.slots.map(slot => <BlockView key={slot.id} slot={slot} role={message.role} toolsHost={toolsHost} {...props}/>)}
+      <div className="message-content">{message.attachments && message.attachments.length > 0 && <div className="message-attachments">{message.attachments.map(a => <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" title={a.name}>{a.kind === 'image' ? <img src={`/api/attachments/${a.id}`} alt={a.name}/> : <span>TXT</span>}<small>{a.name}</small></a>)}</div>}{(job?.reasoning || message.reasoning_text) && <ReasoningPanel text={job?.reasoning || message.reasoning_text || ''} simulated={message.model_label === '模拟模式'} startedAt={job?.reasoningStartedAt} endedAt={job?.reasoningEndedAt}/>}{message.slots.map(slot => <BlockView key={slot.id} messageId={message.id} slot={slot} role={message.role} toolsHost={toolsHost} {...props}/>)}
       {pending && <div className="streaming-container" aria-live="off">{job?.text || message.content_markdown ? <StreamingMarkdown source={job?.text || message.content_markdown}/> : <span className="thinking">正在整理思路<span>···</span></span>}</div>}
       {!pending && message.status !== 'complete' && <div className="failed-message">{message.content_markdown && <div className="stopped-draft markdown"><Markdown source={message.content_markdown}/></div>}<span>{message.status === 'stopped' ? '已停止生成' : '回答未完成'}</span><button onClick={async () => { try { const result = await api<GenerationResult>(`/messages/${message.id}/retry`, 'POST', { requestId: crypto.randomUUID() }); void runGeneration(result, 'reply'); } catch (e) { notify((e as Error).message); } }}>重试</button></div>}
       </div><aside className="message-tools" aria-label="右侧功能区" ref={setToolsHost}/></div>
@@ -211,7 +211,7 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
   </article>;
 }
 
-function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissSelection, toolsHost }: ConversationProps & { slot: Slot; role: string; toolsHost: HTMLElement | null }) {
+function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect, onDismissSelection, toolsHost }: ConversationProps & { messageId:string; slot: Slot; role: string; toolsHost: HTMLElement | null }) {
   const state = useAppState(); const node = slot.node; const pending = Object.values(state.jobs).find(j => j.nodeId === node.id);
   const [starting, setStarting] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; raw: string; copyOnly: boolean; selection?: SelectionData; reason: string; branchId?: string } | null>(null);
@@ -220,7 +220,14 @@ function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissS
   const [adding, setAdding] = useState(false), [addText, setAddText] = useState('');
   const [editText, setEditText] = useState(node.markdown), [saving, setSaving] = useState(false);
   const [deletingBranch,setDeletingBranch] = useState(false);
-  const [deleteScope,setDeleteScope] = useState<'all'|'current'>('all');
+  const [deletingMessage,setDeletingMessage]=useState(false), [deleteSubmenu,setDeleteSubmenu]=useState(false);
+  const message=state.streams[streamId!]?.messages.find(m=>m.id===messageId);
+  const messageBusy=Object.values(state.jobs).some(job=>job.streamId===streamId) || !!state.streams[streamId!]?.messages.some(m=>['queued','streaming'].includes(m.status));
+  const removeMessage=async()=>{
+    setSaving(true);try{const result=await api<{streamIds:string[]}>(`/messages/${messageId}`,'DELETE');forgetStreams(result.streamIds);await loadStream(streamId!);await refreshSessions();setMenu(false);setDeletingMessage(false);}catch(e){notify((e as Error).message);}finally{setSaving(false);}
+  };
+  useEffect(()=>{if(!menu){setDeletingMessage(false);setDeleteSubmenu(false);}},[menu]);
+  const [deleteScope,setDeleteScope] = useState<'all'|'current'|'history'>('all');
   const menuRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<HTMLButtonElement>(null);
   useEffect(() => { setEditing(false); setDeleting(false); setAdding(false); setContextMenu(current => current ? { ...current, selection:undefined, reason:'内容版本已切换，请重新选择文字' } : null); }, [node.id]);
@@ -229,7 +236,7 @@ function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissS
     const dismiss = (e: PointerEvent) => { if (!menuRef.current?.contains(e.target as Node) && !handleRef.current?.parentElement?.contains(e.target as Node)) { setMenu(false); setDeleting(false); } };
     const escape = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); setMenu(false); setDeleting(false); handleRef.current?.focus(); } };
     document.addEventListener('pointerdown', dismiss); window.addEventListener('keydown', escape, true);
-    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus({preventScroll:true});
     return () => { document.removeEventListener('pointerdown', dismiss); window.removeEventListener('keydown', escape, true); };
   }, [menu]);
   useLayoutEffect(() => {
@@ -237,14 +244,21 @@ function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissS
     const el=menuRef.current, rect=el.getBoundingClientRect();
     el.style.left=`${Math.max(8,Math.min(contextMenu.x,innerWidth-rect.width-8))}px`;
     el.style.top=`${Math.max(8,Math.min(contextMenu.y,innerHeight-rect.height-8))}px`;
-  },[menu,contextMenu,deleting,deletingBranch,slot.versions.length]);
+  },[menu,contextMenu,deleting,deletingBranch,deletingMessage,slot.versions.length]);
   useEffect(() => {
     if (!menu || !contextMenu) return;
     const close=(e:Event)=>{if (!menuRef.current?.contains(e.target as Node)) setMenu(false);};
     window.addEventListener('scroll',close,true); window.addEventListener('resize',close);
     return ()=>{window.removeEventListener('scroll',close,true);window.removeEventListener('resize',close);};
   },[menu,contextMenu]);
-  const changeContent = async (remove = false, scope: 'all' | 'current' = 'all') => {
+  useLayoutEffect(()=>{
+    const submenu=menuRef.current?.querySelector<HTMLElement>('.block-delete-submenu');if(!submenu)return;
+    const parent=submenu.parentElement!.getBoundingClientRect();
+    const rect=submenu.getBoundingClientRect();
+    const left=parent.right+rect.width>innerWidth-8 ? parent.left-rect.width : parent.right;
+    submenu.style.left=`${Math.max(8,left)}px`;submenu.style.top=`${Math.max(8,Math.min(parent.top-3,innerHeight-rect.height-8))}px`;
+  },[deleteSubmenu]);
+  const changeContent = async (remove = false, scope: 'all' | 'current' | 'history' = 'all') => {
     setSaving(true);
     try {
       const result = await api<{streamIds?:string[]}>(`/slots/${slot.id}${remove ? '' : '/content'}`, remove ? 'DELETE' : 'PATCH', { expectedActiveNodeId: node.id, ...(remove ? {scope} : { markdown: editText }) });
@@ -258,7 +272,8 @@ function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissS
     try { await deleteBranch(contextMenu.branchId); setMenu(false); setDeletingBranch(false); setActiveBranch(null); window.getSelection()?.removeAllRanges(); }
     catch(e) { notify((e as Error).message); } finally { setSaving(false); }
   };
-  const requestBlockDelete = (scope: 'all' | 'current') => {
+  const requestBlockDelete = (scope: 'all' | 'current' | 'history') => {
+    setDeleteSubmenu(false);
     if (state.settings?.confirmDeletion === false) void changeContent(true,scope);
     else { setDeleteScope(scope); setDeleting(true); }
   };
@@ -308,7 +323,7 @@ function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissS
     const selection = readSelection();
     const highlight = (event.target as HTMLElement).closest<HTMLElement>('[data-branch]');
     const branchId = slot.anchors.find(a => a.id === highlight?.dataset.branch)?.id;
-    onDismissSelection(); setDeleting(false); setDeletingBranch(false); setContextMenu({ ...selection, branchId, x:event.clientX, y:event.clientY }); setMenu(true);
+    onDismissSelection(); setDeleting(false); setDeletingBranch(false); setDeletingMessage(false);setDeleteSubmenu(false); setContextMenu({ ...selection, branchId, x:event.clientX, y:event.clientY }); setMenu(true);
   };
   const contextAction = (mode: 'question' | 'note') => {
     if (!contextMenu?.selection || contextMenu.reason) { notify(contextMenu?.reason || '请先选中文字'); return; }
@@ -323,21 +338,29 @@ function BlockView({ slot, role, streamId, depth, onBranch, onSelect, onDismissS
   const blockMenu = <div className={`block-menu ${contextMenu ? 'context-block-menu' : ''}`} style={contextMenu ? { position:'fixed', left:contextMenu.x, top:contextMenu.y } : undefined} ref={menuRef} role="menu" aria-label={contextMenu ? '内容右键菜单' : '块操作菜单'} onMouseDown={e => e.preventDefault()} onKeyDown={e => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const buttons = [...e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]; const at = buttons.indexOf(document.activeElement as HTMLButtonElement); buttons[(at + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
       if (e.key === 'Tab') { setMenu(false); setDeleting(false); }
-    }}>{contextMenu?.copyOnly ? <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(contextMenu.raw).then(() => notify('已复制')).catch(() => notify('复制失败')); setMenu(false); }}><Copy size={14}/>复制为 Markdown</button> : deletingBranch ? <><p>删除此分支？其子分支也将被同时删除</p><div className="block-menu-confirm"><button disabled={saving} onClick={() => setDeletingBranch(false)}>取消</button><button className="delete-action" disabled={saving} onClick={() => void removeBranch()}>确认删除分支</button></div></> : deleting ? <><p>{slot.versions.length > 1 ? (deleteScope === 'current' ? '删除当前版本？此版本的分支也将删除' : '删除所有版本？块内的分支也将删除') : '删除此块？块内的分支也将被同时删除'}</p><div className="block-menu-confirm"><button onClick={() => setDeleting(false)} disabled={saving}>取消</button><button className="delete-action" onClick={() => void changeContent(true,deleteScope)} disabled={saving}>确认删除</button></div></> : <>
+    }}>{contextMenu?.copyOnly ? <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(contextMenu.raw).then(() => notify('已复制')).catch(() => notify('复制失败')); setMenu(false); }}><Copy size={14}/>复制为 Markdown</button> : deletingMessage ? <><p>删除整条消息？消息内的分支也将删除</p><div className="block-menu-confirm"><button disabled={saving} onClick={()=>setDeletingMessage(false)}>取消</button><button className="delete-action" disabled={saving} onClick={()=>void removeMessage()}>确认删除消息</button></div></> : deletingBranch ? <><p>删除此分支？其子分支也将被同时删除</p><div className="block-menu-confirm"><button disabled={saving} onClick={() => setDeletingBranch(false)}>取消</button><button className="delete-action" disabled={saving} onClick={() => void removeBranch()}>确认删除分支</button></div></> : deleting ? <><p>{slot.versions.length > 1 ? (deleteScope === 'current' ? '删除当前版本？此版本的分支也将删除' : deleteScope === 'history' ? '删除历史版本？对应分支也将删除' : '删除所有版本？块内的分支也将删除') : '删除此块？块内的分支也将被同时删除'}</p><div className="block-menu-confirm"><button onClick={() => setDeleting(false)} disabled={saving}>取消</button><button className="delete-action" onClick={() => void changeContent(true,deleteScope)} disabled={saving}>确认删除</button></div></> : <>
       {contextMenu && <>
         {contextMenu.branchId && <button role="menuitem" className="delete-action" onClick={() => { if (state.settings?.confirmDeletion === false) void removeBranch(); else setDeletingBranch(true); }}><Trash2 size={14}/>删除分支</button>}
         <button role="menuitem" aria-disabled={!!contextMenu.reason} onClick={() => contextAction('question')}><GitBranch size={14}/>追问</button>
         <button role="menuitem" aria-disabled={!!contextMenu.reason} onClick={() => contextAction('note')}><StickyNote size={14}/>笔记</button>
-        <div className="menu-separator" role="separator"/>
-        <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(contextMenu.raw).then(() => notify('已复制')).catch(() => notify('复制失败')); setMenu(false); }}><Copy size={14}/>复制为 Markdown</button>
         <div className="menu-separator" role="separator"/>
       </>}
       {slot.versions.length > 1 && <div className="menu-versions"><span>历史版本</span><div className="version-switcher"><button className="icon-button" aria-label="上一个版本" disabled={version <= 0} onClick={() => void changeVersion(version - 1)}><ChevronLeft size={13}/></button><span>版本 {version + 1} / {slot.versions.length}</span><button className="icon-button" aria-label="下一个版本" disabled={version >= slot.versions.length - 1} onClick={() => void changeVersion(version + 1)}><ChevronRight size={13}/></button></div></div>}
       {node.block_type !== 'image' && slot.anchors.length > 0 && <button role="menuitem" disabled={starting || !!pending} onClick={() => { setMenu(false); void rewrite(); }}><Sparkles size={14}/>结合追问重新解释</button>}
       <button role="menuitem" disabled={!!pending} onClick={() => { setAdding(true); setAddText(''); setMenu(false); }}><Plus size={14}/>在下方添加块</button>
       <button role="menuitem" disabled={!!pending} onClick={() => { setEditText(node.markdown); setEditing(true); setMenu(false); }}><Pencil size={14}/>编辑内容</button>
-      <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(node.markdown).then(() => notify('已复制')).catch(() => notify('复制失败')); setMenu(false); }}><Copy size={14}/>复制 Markdown</button>
-      <div className="menu-separator"/>{slot.versions.length > 1 ? <><button role="menuitem" className="delete-action" disabled={!!pending || saving} onClick={() => requestBlockDelete('current')}><Trash2 size={14}/>删除当前版本</button><button role="menuitem" className="delete-action" disabled={!!pending || saving} onClick={() => requestBlockDelete('all')}><Trash2 size={14}/>删除所有版本</button></> : <button role="menuitem" className="delete-action" disabled={!!pending || saving} onClick={() => requestBlockDelete('all')}><Trash2 size={14}/>删除块</button>}
+      <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(node.markdown).then(() => notify('已复制')).catch(() => notify('复制失败')); setMenu(false); }}><Copy size={14}/>复制块为 Markdown</button>
+      {slot.versions.length > 1 ? <div className="menu-submenu" onMouseEnter={()=>{if(!messageBusy && !saving)setDeleteSubmenu(true);}} onMouseLeave={()=>setDeleteSubmenu(false)}>
+        <button role="menuitem" className="delete-action" aria-haspopup="menu" aria-expanded={deleteSubmenu} disabled={messageBusy || saving} onClick={()=>setDeleteSubmenu(!deleteSubmenu)} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();setDeleteSubmenu(true);const target=e.currentTarget;requestAnimationFrame(()=>target.parentElement?.querySelector<HTMLButtonElement>('[role=menu] button')?.focus());}}}><Trash2 size={14}/>删除块<ChevronRight size={14}/></button>
+        {deleteSubmenu && <div className="block-delete-submenu" role="menu" aria-label="删除块版本" onKeyDown={e=>{if(e.key==='ArrowLeft'){e.preventDefault();setDeleteSubmenu(false);e.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button')?.focus();}}}>
+          <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>requestBlockDelete('current')}>删除当前版本</button>
+          <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>requestBlockDelete('history')}>删除历史版本</button>
+          <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>requestBlockDelete('all')}>删除所有版本</button>
+        </div>}
+      </div> : <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>requestBlockDelete('all')}><Trash2 size={14}/>删除块</button>}
+      <div className="menu-separator" role="separator"/>
+      <button role="menuitem" onClick={()=>{const raw=message?.slots.map(s=>`${s.meta.quote?'> ':''}${s.meta.marker?`${s.meta.marker==='•'?'-':s.meta.marker} `:''}${s.node.markdown}`).join('\n\n') || message?.content_markdown || '';void navigator.clipboard.writeText(raw).then(()=>notify('已复制')).catch(()=>notify('复制失败'));setMenu(false);}}><Copy size={14}/>复制整条消息</button>
+      <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>{if(state.settings?.confirmDeletion===false)void removeMessage();else setDeletingMessage(true);}}><Trash2 size={14}/>删除整条消息</button>
     </>}</div>;
   return <div className={`content-block document-block ${menu ? 'menu-open' : ''} ${slot.meta.quote ? 'quoted' : ''} ${slot.meta.marker ? 'list-block' : ''}`} style={{ marginLeft: (slot.meta.depth || 0) * 20 }} data-slot={slot.id} onContextMenu={openContextMenu}>
     {!editing && <div className="block-handles">{slot.versions.length > 1 && <button className="block-history" aria-label="历史版本" title="历史版本" onClick={() => { setContextMenu(null); setMenu(!menu); setDeleting(false); setDeletingBranch(false); }}><History size={16}/></button>}<button ref={handleRef} className="block-handle" aria-label="块操作" aria-haspopup="menu" aria-expanded={menu} title="块操作" onClick={() => { setContextMenu(null); setMenu(!menu); setDeleting(false); setDeletingBranch(false); }}><GripVertical size={16}/></button></div>}

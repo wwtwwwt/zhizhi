@@ -19,11 +19,19 @@ export function ImageViewer({url,alt,onClose}:{url:string;alt:string;onClose:()=
       if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();onClose();}
       if(e.key==='Tab'){e.preventDefault();const controls=[...panel.current!.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];const index=controls.indexOf(document.activeElement as HTMLButtonElement);controls[(index+(e.shiftKey?-1:1)+controls.length)%controls.length]?.focus();}
     };
+    let trackpadUntil=0;
     const wheel=(e:WheelEvent)=>{
-      e.stopPropagation();e.preventDefault();if(!e.deltaY)return;
+      e.stopPropagation();e.preventDefault();
+      // Chromium exposes trackpad pinch as ctrl+wheel. Pixel deltas with a
+      // horizontal component or small/fractional steps are two-finger panning;
+      // coarse wheel notches retain mouse-wheel zoom.
+      const trackpad=!e.ctrlKey && !e.metaKey && e.deltaMode===0 && (Date.now()<trackpadUntil || e.deltaX!==0 || Math.abs(e.deltaY)<40 || !Number.isInteger(e.deltaY));
+      if(trackpad)trackpadUntil=Date.now()+250;
+      if(trackpad){setView(previous=>({...previous,x:previous.x-e.deltaX,y:previous.y-e.deltaY}));return;}
+      if(!e.deltaY)return;
       const bounds=viewport.current!.getBoundingClientRect();
       const point=e.clientX>=bounds.left && e.clientX<=bounds.right && e.clientY>=bounds.top && e.clientY<=bounds.bottom ? {x:e.clientX-bounds.left-bounds.width/2,y:e.clientY-bounds.top-bounds.height/2} : undefined;
-      change(e.deltaY<0?1.1:1/1.1,point);
+      change(e.ctrlKey||e.metaKey ? Math.exp(-e.deltaY*.01) : e.deltaY<0?1.1:1/1.1,point);
     };
     const area=viewport.current;area?.addEventListener('wheel',wheel,{passive:false});
     window.addEventListener('keydown',key,true);

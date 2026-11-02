@@ -16,7 +16,7 @@ export type Row = Record<string, any>;
 export class AppError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
 const id = () => randomUUID();
 const now = () => new Date().toISOString();
-export const defaults: Settings = { autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:14, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
+export const defaults: Settings = { autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
 export class Store {
   db: DatabaseSync;
   models: ModelRegistry;
@@ -74,7 +74,7 @@ export class Store {
   }
   assertVisible(slot: Row) { if (!this.visibleSlots(slot.message_id).some(s => s.id === slot.id)) throw new AppError(409, 'STALE_VERSION', '内容已变化，请从当前显示的版本操作'); }
   branchPreview(streamId: string): NonNullable<Anchor['preview']> {
-    const first = (role: string) => this.one('SELECT * FROM messages WHERE stream_id=? AND role=? ORDER BY ordinal LIMIT 1', streamId, role);
+    const first = (role: string) => this.one("SELECT * FROM messages WHERE stream_id=? AND role=? AND status!='deleted' ORDER BY ordinal LIMIT 1", streamId, role);
     const snippet = (message?: Row) => !message ? '' : message.status === 'complete'
       ? this.visibleSlots(message.id).map(s => this.need('content_nodes', s.active_node_id).selection_text).join(' ').slice(0, 180)
       : nodeTree(message.content_markdown || '').text.slice(0, 180);
@@ -83,7 +83,7 @@ export class Store {
   }
   stream(streamId: string): Stream {
     const stream = this.need('streams', streamId);
-    const messages = this.all('SELECT * FROM messages WHERE stream_id=? ORDER BY ordinal', streamId).map(m => ({ ...m, attachments: attachmentInfo(this, m.id),
+    const messages = this.all("SELECT * FROM messages WHERE stream_id=? AND status!='deleted' ORDER BY ordinal", streamId).map(m => ({ ...m, attachments: attachmentInfo(this, m.id),
       slots: this.visibleSlots(m.id).map(s => {
         const node = this.need('content_nodes', s.active_node_id) as ContentNode;
         return { ...s, meta: JSON.parse(this.one('SELECT meta_json FROM node_layout WHERE node_id=?', node.id)?.meta_json || s.render_meta_json), node,
@@ -210,6 +210,19 @@ export class Store {
       return { streamIds, parentStreamId: parent.stream_id };
     });
   }
+  deleteMessage(messageId: string) {
+    return this.tx(()=>{
+      const message=this.need('messages',messageId);this.assertIdle(message.stream_id);
+      const streamIds:string[]=[];
+      for(const branch of this.all('SELECT b.id FROM branches b JOIN content_nodes n ON n.id=b.source_node_id JOIN block_slots s ON s.id=n.slot_id WHERE s.message_id=?',messageId)) streamIds.push(...this.branchTree(branch.id));
+      for(const id of [...new Set(streamIds)].reverse()) this.run('DELETE FROM streams WHERE id=?',id);
+      this.run('UPDATE block_slots SET deleted_at=? WHERE message_id=?',now(),messageId);
+      this.run("UPDATE messages SET status='deleted',content_markdown='',reasoning_text='' WHERE id=?",messageId);
+      this.run('DELETE FROM generations WHERE target_message_id=?',messageId);
+      this.pruneDeletedResources();this.touch(message.stream_id);
+      return {streamIds:[...new Set(streamIds)],parentStreamId:message.stream_id};
+    });
+  }
   pruneDeletedResources() {
     // Frozen snapshots in surviving branches still need their ancestor nodes.
     const retained = new Set<string>(), attachmentMessages = new Set<string>();
@@ -223,8 +236,10 @@ export class Store {
         if (!retained.has(node.id)) this.run('DELETE FROM content_nodes WHERE id=?',node.id);
       if (!this.one('SELECT id FROM content_nodes WHERE slot_id=?',slot.id)) this.run('DELETE FROM block_slots WHERE id=?',slot.id);
     }
-    for (const message of this.all("SELECT id FROM messages WHERE status='complete' AND NOT EXISTS(SELECT 1 FROM block_slots s WHERE s.message_id=messages.id AND s.deleted_at IS NULL)"))
+    for (const message of this.all("SELECT id FROM messages WHERE status IN ('complete','deleted') AND NOT EXISTS(SELECT 1 FROM block_slots s WHERE s.message_id=messages.id AND s.deleted_at IS NULL)"))
       if (!attachmentMessages.has(message.id)) this.run('DELETE FROM attachments WHERE message_id=?',message.id);
+    for(const message of this.all("SELECT id FROM messages WHERE status='deleted'"))
+      if(!attachmentMessages.has(message.id) && !this.one('SELECT id FROM block_slots WHERE message_id=?',message.id)) this.run('DELETE FROM messages WHERE id=?',message.id);
     // Imported images never enter model context; only renderable versions need them.
     const markdown = this.all("SELECT n.markdown FROM content_nodes n JOIN block_slots s ON s.id=n.slot_id WHERE s.deleted_at IS NULL AND n.status!='deleted'").map(n=>n.markdown as string);
     for (const resource of this.all('SELECT id FROM document_resources'))
@@ -281,7 +296,7 @@ export class Store {
   switchVersion(slotId: string, nodeId: string, expected: string) {
     this.tx(() => { const slot = this.need('block_slots', slotId), node = this.need('content_nodes', nodeId); this.assertVisible(slot); if (slot.deleted_at || slot.active_node_id !== expected || node.slot_id !== slotId || node.status !== 'available') throw new AppError(409, 'VERSION_CONFLICT', '版本已变化，请刷新后再试'); this.run('UPDATE block_slots SET active_node_id=? WHERE id=?', nodeId, slotId); });
   }
-  changeBlock(slotId: string, expected: string, markdown?: string, scope: 'all' | 'current' = 'all') {
+  changeBlock(slotId: string, expected: string, markdown?: string, scope: 'all' | 'current' | 'history' = 'all') {
     return this.tx(() => {
       const slot = this.need('block_slots', slotId), message = this.need('messages', slot.message_id);
       this.assertVisible(slot);
@@ -290,14 +305,16 @@ export class Store {
       if (this.one("SELECT id FROM rewrite_proposals WHERE source_node_id=? AND status='pending'", expected)) throw new AppError(409, 'PENDING_REWRITE', '请先处理重构预览');
       const streamIds: string[] = [];
       if (markdown === undefined) {
-        for (const branch of this.all("SELECT b.id FROM branches b JOIN content_nodes n ON n.id=b.source_node_id WHERE n.slot_id=? AND (?='all' OR n.id=?)",slotId,scope,expected)) {
+        for (const branch of this.all("SELECT b.id FROM branches b JOIN content_nodes n ON n.id=b.source_node_id WHERE n.slot_id=? AND (?='all' OR (?='current' AND n.id=?) OR (?='history' AND n.id!=?))",slotId,scope,scope,expected,scope,expected)) {
           streamIds.push(...this.branchTree(branch.id));
         }
         for (const id of [...new Set(streamIds)].reverse()) this.run('DELETE FROM streams WHERE id=?',id);
         const versions = this.all("SELECT id FROM content_nodes WHERE slot_id=? AND status='available' ORDER BY version_no",slotId);
         const at = versions.findIndex(n=>n.id===expected);
         const next = versions[at-1] || versions[at+1];
-        if (scope === 'current' && next) {
+        if (scope === 'history') {
+          this.run("UPDATE content_nodes SET status='deleted' WHERE slot_id=? AND id!=?",slotId,expected);
+        } else if (scope === 'current' && next) {
           this.run("UPDATE content_nodes SET status='deleted' WHERE id=?",expected);
           this.run('UPDATE block_slots SET active_node_id=? WHERE id=?',next.id,slotId);
         } else this.run('UPDATE block_slots SET deleted_at=? WHERE id=?', now(), slotId);

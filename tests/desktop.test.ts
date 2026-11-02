@@ -44,3 +44,37 @@ test('desktop API requires session token, rejects foreign origins, and authentic
     expect(events.some(e=>e.event==='error')).toBe(false);
   }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));store.db.close();rmSync(dir,{recursive:true,force:true});}
 });
+
+test('cancel persists every emitted delta as stopped blocks and later context', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'zhizhi-stop-')), store = new Store(dir);
+  store.saveSettings({ ...store.settings(), fakeDelay: 20 });
+  const { app } = createApp(store), server = createServer(app);
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  try {
+    const session = store.createSession();
+    const generation = store.appendQuestion(session.root_stream_id, '停止测试', randomUUID());
+    const response = await fetch(`${base}/api/generations/${generation.generationId}/events`);
+    let emitted = '', cancelled = false;
+    for await (const event of readSSE(response.body!)) {
+      if (event.event === 'delta') {
+        emitted += JSON.parse(event.data).text;
+        if (!cancelled && emitted.length >= 24) {
+          cancelled = true;
+          expect((await fetch(`${base}/api/generations/${generation.generationId}/cancel`, { method: 'POST' })).ok).toBe(true);
+        }
+      }
+    }
+    expect(cancelled).toBe(true);
+    const message = store.stream(session.root_stream_id).messages[1];
+    expect(message.status).toBe('stopped');
+    expect(message.content_markdown).toBe(emitted);
+    expect(message.slots.length).toBeGreaterThan(0);
+    expect(store.context(session.root_stream_id).at(-1)?.role).toBe('assistant');
+    expect(store.context(session.root_stream_id).at(-1)?.content).toBe(emitted.trim());
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    store.db.close(); rmSync(dir, { recursive: true, force: true });
+  }
+});

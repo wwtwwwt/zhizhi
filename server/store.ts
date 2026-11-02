@@ -76,7 +76,7 @@ export class Store {
   assertVisible(slot: Row) { if (!this.visibleSlots(slot.message_id).some(s => s.id === slot.id)) throw new AppError(409, 'STALE_VERSION', '内容已变化，请从当前显示的版本操作'); }
   branchPreview(streamId: string): NonNullable<Anchor['preview']> {
     const first = (role: string) => this.one("SELECT * FROM messages WHERE stream_id=? AND role=? AND status!='deleted' ORDER BY ordinal LIMIT 1", streamId, role);
-    const snippet = (message?: Row) => !message ? '' : message.status === 'complete'
+    const snippet = (message?: Row) => !message ? '' : ['complete','stopped'].includes(message.status)
       ? this.visibleSlots(message.id).map(s => this.need('content_nodes', s.active_node_id).selection_text).join(' ').slice(0, 180)
       : nodeTree(message.content_markdown || '').text.slice(0, 180);
     const answer = first('assistant');
@@ -105,7 +105,7 @@ export class Store {
   refs(streamId: string, throughNode?: string): ContextRef[] {
     const stream = this.need('streams', streamId);
     const refs: ContextRef[] = JSON.parse(stream.context_snapshot_json);
-    for (const message of this.all("SELECT * FROM messages WHERE stream_id=? AND status='complete' ORDER BY ordinal", streamId)) {
+    for (const message of this.all("SELECT * FROM messages WHERE stream_id=? AND status IN ('complete','stopped') ORDER BY ordinal", streamId)) {
       const slots = this.visibleSlots(message.id);
       const ids: string[] = [];
       for (const s of slots) { ids.push(s.active_node_id); if (s.active_node_id === throughNode) break; }
@@ -178,7 +178,7 @@ export class Store {
     else { const old = this.one('SELECT * FROM branches WHERE request_id=?', requestId); if (old) { if (old.source_node_id !== sourceNodeId || old.start_offset !== start || old.end_offset !== end || old.selected_text !== selectedText || this.one('SELECT content_markdown FROM messages WHERE stream_id=? AND ordinal=0', old.stream_id)?.content_markdown !== question) throw new AppError(409, 'REQUEST_CONFLICT', '请求标识已用于其他操作'); return { streamId: old.stream_id, branch: old as Anchor }; } }
     return this.tx(() => {
       const node = this.need('content_nodes', sourceNodeId), slot = this.need('block_slots', node.slot_id), message = this.need('messages', slot.message_id), parent = this.need('streams', message.stream_id);
-      if (slot.deleted_at || slot.active_node_id !== sourceNodeId || node.status !== 'available' || node.block_type === 'thematicBreak' || message.status !== 'complete') throw new AppError(409, 'STALE_VERSION', '只能从当前已完成的正文创建分支');
+      if (slot.deleted_at || slot.active_node_id !== sourceNodeId || node.status !== 'available' || node.block_type === 'thematicBreak' || !['complete','stopped'].includes(message.status)) throw new AppError(409, 'STALE_VERSION', '只能从当前已完成的正文创建分支');
       this.assertVisible(slot);
       if (!validBoundary(node.selection_text, start, end) || !validMathSelection(node.markdown, start, end) || !selectedText.trim() || node.selection_text.slice(start, end) !== selectedText) throw new AppError(422, 'INVALID_SELECTION', '选中文字发生变化或公式未完整选择，请重新选择');
       if (this.one('SELECT id FROM branches WHERE source_node_id=? AND start_offset<? AND end_offset>?', sourceNodeId, end, start)) throw new AppError(409, 'ANCHOR_OVERLAP', '选区包含已有分支，请重新选择');
@@ -237,7 +237,7 @@ export class Store {
         if (!retained.has(node.id)) this.run('DELETE FROM content_nodes WHERE id=?',node.id);
       if (!this.one('SELECT id FROM content_nodes WHERE slot_id=?',slot.id)) this.run('DELETE FROM block_slots WHERE id=?',slot.id);
     }
-    for (const message of this.all("SELECT id FROM messages WHERE status IN ('complete','deleted') AND NOT EXISTS(SELECT 1 FROM block_slots s WHERE s.message_id=messages.id AND s.deleted_at IS NULL)"))
+    for (const message of this.all("SELECT id FROM messages WHERE status IN ('complete','stopped','deleted') AND NOT EXISTS(SELECT 1 FROM block_slots s WHERE s.message_id=messages.id AND s.deleted_at IS NULL)"))
       if (!attachmentMessages.has(message.id)) this.run('DELETE FROM attachments WHERE message_id=?',message.id);
     for(const message of this.all("SELECT id FROM messages WHERE status='deleted'"))
       if(!attachmentMessages.has(message.id) && !this.one('SELECT id FROM block_slots WHERE message_id=?',message.id)) this.run('DELETE FROM messages WHERE id=?',message.id);
@@ -264,7 +264,7 @@ export class Store {
           this.assertIdle(branch.stream_id);
           parts.push(renderPrompt('rewriteSource', { nodeId: source, text: branch.selected_text }));
           parts.push(...this.resolve(this.refs(branch.stream_id).slice(JSON.parse(child.context_snapshot_json).length)).map(m => renderPrompt('rewriteTurn', { role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })));
-          const ids = this.all("SELECT id FROM messages WHERE stream_id=? AND status='complete' ORDER BY ordinal", branch.stream_id).flatMap(m => this.visibleSlots(m.id).map(s => s.active_node_id as string));
+          const ids = this.all("SELECT id FROM messages WHERE stream_id=? AND status IN ('complete','stopped') ORDER BY ordinal", branch.stream_id).flatMap(m => this.visibleSlots(m.id).map(s => s.active_node_id as string));
           stack.push(...ids.reverse());
         }
       }
@@ -288,8 +288,18 @@ export class Store {
   }
   end(gid: string, status: 'error' | 'stopped' | 'interrupted', code: string, draft: string) {
     if (!this.one('SELECT id FROM generations WHERE id=?', gid)) return;
-    this.tx(() => { const g = this.need('generations', gid); if (!['streaming','queued'].includes(g.status)) return; this.run('UPDATE generations SET status=?,error_code=?,draft_markdown=?,finished_at=? WHERE id=?', status, code, draft, now(), gid); if (g.target_message_id) this.run('UPDATE messages SET status=?,content_markdown=?,reasoning_text=? WHERE id=?', status, draft, g.reasoning_text || '', g.target_message_id); });
+    this.tx(() => {
+      const g = this.need('generations', gid);
+      if (!['streaming','queued'].includes(g.status)) return;
+      if (g.target_message_id && status === 'stopped' && splitMarkdown(draft).length) {
+        this.finalizeMessage(g.target_message_id, draft);
+      }
+      this.run('UPDATE generations SET status=?,error_code=?,draft_markdown=?,finished_at=? WHERE id=?', status, code, draft, now(), gid);
+      if (g.target_message_id) this.run('UPDATE messages SET status=?,content_markdown=?,reasoning_text=? WHERE id=?', status, draft, g.reasoning_text || '', g.target_message_id);
+      this.touch(g.stream_id);
+    });
   }
+
   switchVersion(slotId: string, nodeId: string, expected: string) {
     this.tx(() => { const slot = this.need('block_slots', slotId), node = this.need('content_nodes', nodeId); this.assertVisible(slot); if (slot.deleted_at || slot.active_node_id !== expected || node.slot_id !== slotId || node.status !== 'available') throw new AppError(409, 'VERSION_CONFLICT', '版本已变化，请刷新后再试'); this.run('UPDATE block_slots SET active_node_id=? WHERE id=?', nodeId, slotId); });
   }
@@ -297,7 +307,7 @@ export class Store {
     return this.tx(() => {
       const slot = this.need('block_slots', slotId), message = this.need('messages', slot.message_id);
       this.assertVisible(slot);
-      if (slot.deleted_at || slot.active_node_id !== expected || message.status !== 'complete') throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
+      if (slot.deleted_at || slot.active_node_id !== expected || !['complete','stopped'].includes(message.status)) throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
       this.assertIdle(message.stream_id);
       if (this.one("SELECT id FROM rewrite_proposals WHERE source_node_id=? AND status='pending'", expected)) throw new AppError(409, 'PENDING_REWRITE', '请先处理重构预览');
       const streamIds: string[] = [];
@@ -351,7 +361,7 @@ export class Store {
     return this.tx(() => {
       const slot = this.need('block_slots', slotId), message = this.need('messages', slot.message_id);
       this.assertVisible(slot); this.assertIdle(message.stream_id);
-      if (slot.active_node_id !== expected || message.status !== 'complete') throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
+      if (slot.active_node_id !== expected || !['complete','stopped'].includes(message.status)) throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
       const blocks = splitMarkdown(markdown); if (!blocks.length) throw new AppError(422, 'EMPTY_BLOCK', '内容不能为空');
       const ids = this.insertBlocks(slot, blocks); this.touch(message.stream_id); return { slotIds: ids };
     });

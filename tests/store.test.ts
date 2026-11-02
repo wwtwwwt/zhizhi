@@ -340,3 +340,40 @@ test('message deletion removes all version branches while preserving frozen cont
   s.deleteBranch(sibling.branch!.id);expect(s.one('SELECT id FROM messages WHERE id=?',message.id)).toBeUndefined();
   expect(s.all('PRAGMA foreign_key_check')).toHaveLength(0);
 });
+
+test('manual stop finalizes partial blocks for context, editing and nested branches exactly once', () => {
+  const session = s.createSession();
+  const g = s.appendQuestion(session.root_stream_id, '开始', uuid());
+  s.run("UPDATE generations SET status='streaming' WHERE id=?", g.generationId);
+  const draft = '已经生成的段落。\n\n- 第一项\n- 尚未结束的 **第二项';
+  s.end(g.generationId, 'stopped', 'STOPPED', draft);
+  s.end(g.generationId, 'stopped', 'STOPPED', '不能覆盖');
+  const message = s.stream(session.root_stream_id).messages[1];
+  expect(message.status).toBe('stopped');
+  expect(message.slots).toHaveLength(3);
+  expect(JSON.stringify(s.context(session.root_stream_id))).toContain('已经生成的段落');
+  expect(JSON.stringify(s.context(session.root_stream_id))).toContain('尚未结束');
+  const node = message.slots[0].node;
+  const branch = s.createBranch(node.id, 0, 2, '已经', '解释', uuid());
+  s.end(branch.generationId, 'stopped', 'STOPPED', '子分支回答');
+  const child = s.stream(branch.streamId).messages[1].slots[0].node;
+  const nested = s.createBranch(child.id, 0, 2, '子分', '再解释', uuid());
+  finish(nested, '深层回答');
+  const rewrite = s.rewrite(node.id, uuid());
+  expect(s.need('generations', rewrite.generationId).context_json).toContain('深层回答');
+  s.end(rewrite.generationId, 'stopped', 'STOPPED', '重构片段');
+  expect(s.all('SELECT * FROM rewrite_proposals WHERE generation_id=?', rewrite.generationId)).toHaveLength(0);
+  const item = message.slots[1];
+  s.changeBlock(item.id, item.node.id, '修改后的列表项');
+  expect(JSON.stringify(s.context(session.root_stream_id))).toContain('修改后的列表项');
+});
+
+test('empty stops create no blocks; errors and interruptions do not enter context', () => {
+  for (const status of ['stopped', 'error', 'interrupted'] as const) {
+    const session = s.createSession();
+    const g = s.appendQuestion(session.root_stream_id, '问题', uuid());
+    s.end(g.generationId, status, 'TEST', status === 'stopped' ? '' : '不应纳入的草稿');
+    expect(s.stream(session.root_stream_id).messages[1].slots).toHaveLength(0);
+    expect(JSON.stringify(s.context(session.root_stream_id))).not.toContain('不应纳入');
+  }
+});

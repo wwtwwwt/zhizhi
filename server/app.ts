@@ -15,6 +15,7 @@ const idParam = (req: Request) => String(req.params.id);
 export function createApp(store: Store, options: { paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
   const app = express();
   const active = new Map<string, AbortController>();
+  const activeDrafts = new Map<string, () => string>();
   app.disable('x-powered-by');
   app.use('/api', (req, res, next) => {
     if (options.apiToken && req.get('x-zhizhi-token') !== options.apiToken && req.get('authorization') !== `Bearer ${options.apiToken}`) {
@@ -117,7 +118,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
     }
     if (!res.destroyed) res.end('data: [DONE]\n\n');
   });
-  app.post('/api/generations/:id/cancel', (req, res) => { const gid = idParam(req); store.need('generations', gid); active.get(gid)?.abort('stopped'); const g = store.need('generations', gid); store.end(gid, 'stopped', 'STOPPED', g.draft_markdown); res.json({ ok: true }); });
+  app.post('/api/generations/:id/cancel', (req, res) => { const gid = idParam(req); store.need('generations', gid); active.get(gid)?.abort('stopped'); const g = store.need('generations', gid); store.end(gid, 'stopped', 'STOPPED', activeDrafts.get(gid)?.() ?? g.draft_markdown); res.json({ ok: true }); });
   app.get('/api/generations/:id/events', async (req, res) => {
     const gid = idParam(req), g = store.need('generations', gid);
     if (g.status !== 'queued' || active.has(gid)) throw new AppError(409, 'GENERATION_ENDED', '生成已启动或结束，请刷新对话');
@@ -127,6 +128,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' }); res.flushHeaders();
     const send = (event: string, data: unknown) => { if (!res.destroyed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
     let draft = '', reasoning = '', savedAt = 0;
+    activeDrafts.set(gid, () => draft);
     const close = () => { if (!res.writableEnded) controller.abort('interrupted'); }; res.on('close', close);
     send('start', { generationId: gid, kind: g.kind });
     try {
@@ -147,7 +149,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
       const err = e instanceof AppError ? e : new AppError(502, 'UPSTREAM_ERROR', '生成未完成，请检查模型设置');
       store.end(gid, stopped ? (controller.signal.reason === 'stopped' ? 'stopped' : 'interrupted') : 'error', stopped ? 'INTERRUPTED' : err.code, draft);
       send('error', { code: controller.signal.reason === 'deleted' ? 'BRANCH_DELETED' : stopped ? 'INTERRUPTED' : err.code, message: stopped ? '生成已停止' : err.message });
-    } finally { active.delete(gid); res.off('close', close); res.end(); }
+    } finally { active.delete(gid); activeDrafts.delete(gid); res.off('close', close); res.end(); }
   });
   app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: '接口不存在' } }));
   const dist = options.staticDir || resolve('dist');

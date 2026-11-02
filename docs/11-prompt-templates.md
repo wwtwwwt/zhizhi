@@ -73,7 +73,7 @@
 [
   {role: system, content: render(replySystem)},
   ...冻结祖先消息（分支才有）,
-  ...当前流 complete 历史（含已保存的本次 user 问题）
+  ...当前流 complete／stopped 历史（含已保存的本次 user 问题）
 ]
 
 块级重构

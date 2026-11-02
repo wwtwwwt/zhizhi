@@ -25,7 +25,7 @@ export async function* streamChat(options: { messages: ChatMessage[]; settings: 
       const delta = item.choices?.[0]?.delta?.content;
       if (typeof delta === 'string') yield delta;
     }
-    throw new AppError(502, 'STREAM_INTERRUPTED', '模型连接提前结束，请重试');
+    throw new AppError(502, 'STREAM_INTERRUPTED', '模型连接提前结束');
   } catch (e) {
     if (controller.signal.aborted && !signal.aborted) throw new AppError(504, 'TIMEOUT', '等待模型响应超时');
     throw e;

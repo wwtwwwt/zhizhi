@@ -20,7 +20,7 @@
 
 默认temperature=0.7、max_tokens=4096，reasoning_effort=medium默认禁用。context_length以参数形式保存但不透传；其他启用参数发送上游。max_tokens与max_completion_tokens不能同时启用，重复键和model／messages／stream等保留字段拒绝。
 
-任务创建时冻结所选模型配置，修改模型配置不改变已有任务。重试沿用快照，执行时按模型ID读取当前Key；删除模型及密钥后，旧失败任务不能依赖旧Key重试。
+任务创建时冻结所选模型配置，修改模型配置不改变已有任务。执行时按模型ID读取当前Key；停止、失败或中断的任务不提供重试。
 
 配置保存于SQLite models表；fakeDelay存settings.preferences；上次模型选择存浏览器localStorage.lastModelId。密钥按内部ID存私有secrets.json的modelKeys，POSIX权限0600。空Key保持原值，显式清除删除对应索引；GET只返回hasApiKey，不返回Key正文。浏览器预览为本地明文文件，Electron版通过safeStorage加密并使用系统安全存储；见[12](12-electron.md)。
 

@@ -88,7 +88,6 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
   });
   app.post('/api/slots/:id/after', (req, res) => { const d = z.object({ markdown: question, expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.addBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
   app.post('/api/nodes/:id/rewrites', (req, res) => res.json(store.rewrite(idParam(req), z.object({ requestId }).parse(req.body).requestId)));
-  app.post('/api/messages/:id/retry', (req, res) => res.json(store.retry(idParam(req), z.object({ requestId }).parse(req.body).requestId)));
   app.patch('/api/slots/:id/active-version', (req, res) => { const d = z.object({ nodeId: z.string().uuid(), expectedActiveNodeId: z.string().uuid() }).parse(req.body); store.switchVersion(idParam(req), d.nodeId, d.expectedActiveNodeId); res.json({ ok: true }); });
   app.patch('/api/slots/:id/content', (req, res) => { const d = z.object({ markdown: z.string().trim().min(1).max(30_000), expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.changeBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
   app.delete('/api/messages/:id', (req,res)=>{const result=store.deleteMessage(idParam(req));for(const g of active.keys())if(!store.one('SELECT id FROM generations WHERE id=?',g))active.get(g)?.abort('deleted');res.json(result);});
@@ -145,7 +144,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
       const result = store.finish(gid, draft); send('complete', result);
     } catch (e) {
       const stopped = controller.signal.aborted;
-      const err = e instanceof AppError ? e : new AppError(502, 'UPSTREAM_ERROR', '生成未完成，请重试或检查模型设置');
+      const err = e instanceof AppError ? e : new AppError(502, 'UPSTREAM_ERROR', '生成未完成，请检查模型设置');
       store.end(gid, stopped ? (controller.signal.reason === 'stopped' ? 'stopped' : 'interrupted') : 'error', stopped ? 'INTERRUPTED' : err.code, draft);
       send('error', { code: controller.signal.reason === 'deleted' ? 'BRANCH_DELETED' : stopped ? 'INTERRUPTED' : err.code, message: stopped ? '生成已停止' : err.message });
     } finally { active.delete(gid); res.off('close', close); res.end(); }

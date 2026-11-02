@@ -61,7 +61,7 @@ test('reopen recovers pending tasks, durable complete branches, secrets never re
   s.db.close(); s = new Store(dir);
   expect(s.stream(stream).messages[1].slots[0].anchors).toHaveLength(1);
   expect(s.stream(b.streamId).messages[1].status).toBe('interrupted');
-  expect(s.retry(b.messageId!, uuid()).streamId).toBe(b.streamId);
+  expect(s.appendQuestion(b.streamId, '继续提问', uuid()).streamId).toBe(b.streamId);
 });
 
 test('manual edit preserves frozen context; deleting a block removes its branches', () => {

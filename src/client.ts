@@ -29,7 +29,7 @@ export async function runGeneration(result: GenerationResult, kind: 'reply' | 'r
   try {
     await loadStream(result.streamId);
     const response = await fetch(`/api/generations/${gid}/events`);
-    if (!response.ok || !response.body) throw new Error('无法开始生成，请刷新后重试');
+    if (!response.ok || !response.body) throw new Error('无法开始生成，请刷新页面检查任务状态');
     let complete = false;
     for await (const event of readSSE(response.body)) {
       const data = JSON.parse(event.data);

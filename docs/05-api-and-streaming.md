@@ -23,7 +23,6 @@
 | POST /rewrite-proposals/:id/reject | 保留原文，拒绝候选 |
 | GET /generations/:id/events | 启动queued任务并订阅SSE，单任务只执行一次 |
 | POST /generations/:id/cancel | 停止任务并保存草稿 |
-| POST /messages/:id/retry | requestId，重试error／stopped／interrupted回复 |
 | GET／PUT /settings | 获取／部分更新通用偏好、fakeDelay |
 | GET／POST /models | 获取模型列表／添加模型 |
 | PUT／DELETE /models/:id | 更新／删除模型，包含图片能力；fake只允许更新fakeDelay且不可删除 |
@@ -54,7 +53,7 @@
 
 complete只在数据库提交成功后发送。异常断流不能当完成；停止、错误和断连保存终态及草稿。任务完成时，前端同时替换持久化流并移除流式job，防止定稿正文与草稿同时出现。服务端约250ms节流保存正文草稿，终态立即保存。
 
-SSE解析支持跨chunk UTF-8、CRLF、多行data、注释和多个事件；网络chunk不等于完整事件。关闭弹窗保留全局生成连接；离开页面／刷新断连会中断任务，不支持断点续传。重试保留用户问题和助手消息位置，沿用模型配置及上下文快照；已有后续消息时不能重试早期失败回复。
+SSE解析支持跨chunk UTF-8、CRLF、多行data、注释和多个事件；网络chunk不等于完整事件。关闭弹窗保留全局生成连接；离开页面／刷新断连会中断任务，不支持断点续传。停止／失败／中断后保留状态及草稿，不提供重试操作，用户可在底部继续提问。
 
 ## Chat Completions adapter
 

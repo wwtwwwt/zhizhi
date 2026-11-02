@@ -92,15 +92,14 @@ test('closing a streaming branch keeps generation running; later reopening resto
   await expect(page.locator('.top-layer .failed-message')).toHaveCount(0);
 });
 
-test('stop and retry persist one question, settings save, sessions rename/delete', async ({ page, request }) => {
+test('stop preserves draft without retry, settings save, sessions rename/delete', async ({ page, request }) => {
   const settings = await (await request.get('/api/settings')).json(); await request.put('/api/settings', { data: { ...settings, fakeDelay: 80 } });
   await page.goto('/'); await page.getByRole('button', { name: '新的对话', exact: true }).click();
   await page.getByRole('textbox', { name: '输入你的问题' }).fill('停止测试'); await page.getByRole('button', { name: '发送问题', exact: true }).click();
   await page.getByRole('button', { name: '停止生成', exact: true }).click();
   await expect(page.getByText('已停止生成', { exact: true })).toBeVisible();
   await request.put('/api/settings', { data: { ...settings, fakeDelay: 0 } });
-  // Retry keeps the original model snapshot, including the 80ms fake delay.
-  await page.getByRole('button', { name: '重试', exact: true }).click(); await expect(page.locator('.workspace .message-assistant .content-block').first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: '重试', exact: true })).toHaveCount(0);
   await expect(page.locator('.workspace .message-user')).toHaveCount(1);
   const row = page.locator('.session-row.active'); await row.hover(); await row.getByTitle('重命名', { exact: true }).click();
   await page.locator('.manage-dialog input').fill('测试完成'); await page.getByRole('button', { name: '保存', exact: true }).click();

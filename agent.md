@@ -37,7 +37,7 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 数据默认`.learnhelper/`，LEARNHELPER_DATA_DIR覆盖。server/schema.sql直接初始化，无旧开发库升级；当前结构正常重启保留数据，残留任务恢复interrupted。浏览器预览Key存secrets.json的modelKeys；桌面版通过注入SecretCodec使用safeStorage加密同文件，权限0600，不返回前端。开发与正式桌面数据分别存系统应用数据目录的zhizhi-development／zhizhi，不自动迁移预览数据。
 
-前端localStorage保存lastSession、lastModelId和dialogSize；其余草稿、窗口栈与生成job在页面内。关闭窗口不停止生成，刷新断连会中断任务。流式每约45ms渲染，无末尾光标；定稿时原子替换草稿，避免重复内容闪烁。
+前端localStorage保存lastSession、lastModelId和dialogSize；其余草稿、窗口栈与生成job在页面内。关闭窗口不停止生成，刷新断连会中断任务。流式每约45ms渲染，与定稿共用splitMarkdown及列表／引用块布局，无末尾光标；定稿时原子替换草稿，避免重复内容闪烁。
 
 ## 文档导航
 

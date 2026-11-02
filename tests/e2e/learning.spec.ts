@@ -58,7 +58,7 @@ test('selection → three branch layers → drafts/scroll/focus → rewrite vers
   await expect(root.locator('mark').first()).toBeFocused();
   await root.locator('mark').first().click(); await expect(page.locator('.branch-dialog')).toHaveCount(1); await closeBranch(page);
   const tools = page.locator(`[data-slot-tools="${await root.getAttribute('data-slot')}"]`);
-  await (await blockMenu(root)).getByRole('menuitem', { name: '结合追问重新解释', exact: true }).click();
+  await (await blockMenu(root)).getByRole('menuitem', { name: '结合追问重新回答', exact: true }).click();
   await root.getByRole('button', { name: '采用新版', exact: true }).click();
   await expect(root.locator('mark')).toHaveCount(0); await expect(root.getByRole('button', { name: '历史版本', exact: true })).toBeVisible();
   await changeVersion(root, '上一个版本'); await expect(root.locator('mark').first()).toBeVisible();
@@ -181,7 +181,7 @@ test('shared side tools, linked branch previews, branch editing and message navi
   await nav.getByRole('button').first().click(); await expect(page.locator('.top-layer .message').first()).toBeFocused();
   await branch(page, branchBlock.locator('[data-node]'), '梯度', '继续子分支'); await closeBranch(page);
   await expect(branchTools.getByRole('button', { name: '预览分支：继续子分支' })).toBeVisible();
-  await expect((await blockMenu(branchBlock)).getByRole('menuitem', { name: '结合追问重新解释', exact: true })).toBeEnabled();
+  await expect((await blockMenu(branchBlock)).getByRole('menuitem', { name: '结合追问重新回答', exact: true })).toBeEnabled();
   await page.keyboard.press('Escape');
   await closeBranch(page);
   const rootTools = page.locator(`.workspace [data-slot-tools="${await root.getAttribute('data-slot')}"]`);
@@ -311,7 +311,7 @@ test('history lives in handle menu; left stacking persists; outside click closes
   await branch(page, page.locator('.top-layer .message-assistant [data-node]').first(), '梯度', '二级问题');
   await page.mouse.click(5, 5); await expect(page.locator('.branch-dialog')).toHaveCount(1);
   await page.mouse.click(5, 5); await expect(page.locator('.branch-dialog')).toHaveCount(0);
-  const menu = await blockMenu(root); await menu.getByRole('menuitem', { name: '结合追问重新解释', exact: true }).click();
+  const menu = await blockMenu(root); await menu.getByRole('menuitem', { name: '结合追问重新回答', exact: true }).click();
   await root.getByRole('button', { name: '采用新版', exact: true }).click();
   await root.hover(); await root.getByRole('button', { name: '历史版本', exact: true }).click();
   await expect(root.getByRole('menu')).toContainText('版本 2 / 2');
@@ -559,10 +559,10 @@ test('block context menu shares block actions, explains unavailable selections a
     await target.click({button:'right',position:{x:15,y:8}});
   };
   const menu=page.getByRole('menu',{name:'内容右键菜单',exact:true});
-  await open(first);await expect(menu).toBeVisible();await expect(menu.getByRole('separator')).toHaveCount(2);
+  await open(first);await expect(menu).toBeVisible();await expect(menu.getByRole('separator')).toHaveCount(3);
   await expect(menu.getByRole('menuitem',{name:'追问',exact:true})).toHaveAttribute('aria-disabled','false');
   await expect(menu.getByRole('menuitem',{name:'编辑内容',exact:true})).toBeVisible();
-  await menu.getByRole('menuitem',{name:'复制块为 Markdown',exact:true}).dispatchEvent('click');expect(await page.evaluate(()=>(window as any).__copied)).toBe('**第一段**和 $x^2$。');
+  await menu.getByRole('menuitem',{name:'复制块',exact:true}).dispatchEvent('click');expect(await page.evaluate(()=>(window as any).__copied)).toBe('**第一段**和 $x^2$。');
   await open(first);await menu.getByRole('menuitem',{name:'笔记',exact:true}).click();
   await page.getByRole('textbox',{name:'笔记内容',exact:true}).fill('菜单笔记');await page.getByRole('button',{name:'保存笔记',exact:true}).click();
   await expect(first.locator('mark')).not.toHaveCount(0);
@@ -643,7 +643,7 @@ test('CJK punctuation bold renders, copies raw Markdown and preserves branch sel
   await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0);
   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{(window as any).__copied=value;}}});});
   await body.evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);getSelection()!.removeAllRanges();getSelection()!.addRange(r);});
-  await body.click({button:'right'});await page.getByRole('menuitem',{name:'复制块为 Markdown',exact:true}).dispatchEvent('click');expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw);
+  await body.click({button:'right'});await page.getByRole('menuitem',{name:'复制块',exact:true}).dispatchEvent('click');expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw);
   await branch(page,body,'判断：','解释这个判断');await closeBranch(page);await expect(body.locator('strong mark')).toHaveText('判断：');
   await page.reload();await expect(body.locator('strong mark')).toHaveText('判断：');await body.locator('mark').click();await expect(page.locator('.top-layer .source-quote')).toContainText('判断：');
 });
@@ -755,7 +755,7 @@ test('HTML paper tables and superscripts render, copy source and preserve branch
   await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0);
   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{(window as any).__copied=value;}}});});
   await blocks.first().evaluate(el=>{const r=document.createRange();r.selectNodeContents(el);getSelection()!.removeAllRanges();getSelection()!.addRange(r);});
-  await blocks.first().click({button:'right'}); await page.getByRole('menuitem',{name:'复制块为 Markdown',exact:true}).dispatchEvent('click');
+  await blocks.first().click({button:'right'}); await page.getByRole('menuitem',{name:'复制块',exact:true}).dispatchEvent('click');
   expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw.split('\n\n')[0]);
   await branch(page,blocks.nth(1),'∗','这个作者标记是什么意思？'); await closeBranch(page);
   await expect(blocks.nth(1).locator('sup mark')).toHaveText('∗'); await page.reload();
@@ -814,9 +814,9 @@ test('context menu groups block and message actions, copies current message and 
   expect(await block.locator('[data-node]').evaluate(el=>getComputedStyle(el).fontSize)).toBe('15px');
   expect(await page.getByRole('button',{name:'新的对话',exact:true}).evaluate(el=>getComputedStyle(el).fontSize)).toBe('12px');
   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{(window as any).__copied=value;}}});});
-  await block.locator('[data-node]').click({button:'right'});const menu=page.getByRole('menu',{name:'内容右键菜单',exact:true});await expect(menu.getByRole('separator')).toHaveCount(2);
+  await block.locator('[data-node]').click({button:'right'});const menu=page.getByRole('menu',{name:'内容右键菜单',exact:true});await expect(menu.getByRole('separator')).toHaveCount(3);
   const groups=await menu.evaluate(el=>{const groups:string[][]=[[]];for(const child of el.children){if(child.getAttribute('role')==='separator')groups.push([]);else groups.at(-1)!.push(child.textContent || '');}return groups;});
-  expect(groups[0]).toEqual(['追问','笔记']);expect(groups[1]).toContain('复制块为 Markdown');expect(groups[2]).toEqual(['复制整条消息','删除整条消息']);
+  expect(groups[0]).toEqual(['追问','笔记']);expect(groups[1]).toContain('编辑内容');expect(groups[2]).toEqual(['复制块','复制整条消息']);expect(groups[3]).toEqual(['删除块','删除整条消息']);
   await menu.getByRole('menuitem',{name:'复制整条消息',exact:true}).click();expect(await page.evaluate(()=>(window as any).__copied)).toBe(raw);
   await block.locator('[data-node]').click({button:'right'});await menu.getByRole('menuitem',{name:'删除整条消息',exact:true}).click();await expect(menu).toContainText('删除整条消息？消息内的分支也将删除');
   await menu.getByRole('button',{name:'取消',exact:true}).click();await expect(user).toBeVisible();
@@ -824,10 +824,13 @@ test('context menu groups block and message actions, copies current message and 
   await expect(page.locator('.workspace .message-assistant')).toHaveCount(1);await page.reload();await expect(page.locator('.workspace .message-user')).toHaveCount(0);
 });
 
-test('block deletion submenu removes historical versions while leaving current content',async({page,request})=>{
+test('block deletion submenu offers current/all versions with icons',async({page,request})=>{
   await request.put('/api/settings',{data:{fakeDelay:0,confirmDeletion:true}});await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();
   await page.getByRole('textbox',{name:'输入你的问题',exact:true}).fill('原内容');await page.getByRole('button',{name:'发送问题',exact:true}).click();await expect(page.locator('.workspace .message-assistant [data-node]').first()).toBeVisible();await expect(page.locator('.workspace .streaming-draft')).toHaveCount(0);
   const block=page.locator('.workspace .message-user .content-block').first();await(await blockMenu(block)).getByRole('menuitem',{name:'编辑内容',exact:true}).click();await block.getByRole('textbox',{name:'编辑块内容'}).fill('新内容');await block.getByRole('button',{name:'保存新版本'}).click();
   const menu=await blockMenu(block);await menu.getByRole('menuitem',{name:'删除块',exact:true}).focus();await page.keyboard.press('ArrowRight');const sub=menu.getByRole('menu',{name:'删除块版本',exact:true});await expect(sub).toBeVisible();
-  await sub.getByRole('menuitem',{name:'删除历史版本',exact:true}).click();await expect(menu).toContainText('删除历史版本？对应分支也将删除');await menu.getByRole('button',{name:'确认删除',exact:true}).click();await expect(block.locator('[data-node]')).toHaveText('新内容');await expect(block.getByRole('button',{name:'历史版本',exact:true})).toHaveCount(0);
+  await expect(sub.getByRole('menuitem')).toHaveCount(2);
+  await expect(sub.getByRole('menuitem',{name:'删除当前版本',exact:true}).locator('svg')).toHaveCount(1);
+  await expect(sub.getByRole('menuitem',{name:'删除所有版本',exact:true}).locator('svg')).toHaveCount(1);
+  await sub.getByRole('menuitem',{name:'删除当前版本',exact:true}).click();await expect(menu).toContainText('删除当前版本？此版本的分支也将删除');await menu.getByRole('button',{name:'确认删除',exact:true}).click();await expect(block.locator('[data-node]')).toHaveText('原内容');await expect(block.getByRole('button',{name:'历史版本',exact:true})).toHaveCount(0);
 });

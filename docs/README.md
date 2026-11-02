@@ -9,12 +9,12 @@
 | [03 · 架构与技术选择](03-architecture.md) | 实际模块、运行链路及发布形态边界 |
 | [04 · 存储与数据模型](04-storage.md) | 当前 schema、不可变节点、资源回收和恢复 |
 | [05 · API 与模型流](05-api-and-streaming.md) | HTTP 接口、SSE、生成状态和错误 |
-| [06 · 上下文与重构](06-context-and-rewrite.md) | 冻结祖先路径、后代读取、预算和版本隔离 |
+| [06 · 上下文与重构](06-context-and-rewrite.md) | 操作输入矩阵、模块顺序、冻结路径、后代附件限制、预算和诊断 |
 | [07 · 验证与交付](07-delivery-and-tests.md) | 运行命令、现有覆盖和验证边界 |
 | [08 · 模型与附件](08-models-and-attachments.md) | 模型配置、密钥、参数、附件与思考摘要 |
 | [09 · 文档导入](09-document-import.md) | Markdown、论文链接和展示图片 |
 | [10 · 设置与数据管理](10-settings-and-data.md) | 通用偏好、存储统计、清空和窗口尺寸 |
-| [11 · 提示词模板](11-prompt-templates.md) | 当前提示词清单与上下文规则 |
+| [11 · 提示词模板](11-prompt-templates.md) | prompts/模板字段、变量、拼装、构建生效与调优流程 |
 | [12 · Electron 桌面应用](12-electron.md) | 桌面运行、安全存储、开发与本地打包 |
 
 ## 维护规则

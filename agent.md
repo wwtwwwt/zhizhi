@@ -41,11 +41,13 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 ## 文档导航
 
-[工程索引](docs/README.md)列出01–12全部模块。产品／交互看01–02，模块看03，存储看04，接口看05，上下文看06，测试看07，模型附件看08，导入看09，设置数据看10，提示词看11，Electron运行及打包看12。
+[工程索引](docs/README.md)列出01–12全部模块。产品／交互看01–02，模块看03，存储看04，接口看05，上下文看06，测试看07，模型附件看08，导入看09，设置数据看10，提示词看11及根目录prompts/（JSON为模板唯一来源，server/prompts.ts拼装），Electron运行及打包看12。
 
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-02上下文模板解耦：prompts/context.json维护全部请求自然语言模板，prompts/fake.json维护模拟摘要；server/prompts.ts只做单次变量替换与消息拼装，读取范围及原有请求文案不变。22项模板／Store／桌面协议相关测试通过，TypeScript和Electron主进程构建通过。06／11文档详细说明操作矩阵、快照、变量及后代图片仅文本引用的现有限制。
 
 2026-11-02：正文默认15px（UI字号保持），三组右键菜单、版本删除二级菜单、整消息复制／递归删除及触摸板平移捏合完成；50项代码测试及相关无截图浏览器回归通过，生产与Electron主进程构建通过。
 

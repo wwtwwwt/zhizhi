@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { AppError, Store } from './store';
 import { streamChat } from './providers/chat';
 import { importDocument, convertPaper } from './documents';
+import fakePrompts from '../prompts/fake.json';
 import { fixture } from './providers/fake';
 
 const requestId = z.string().uuid();
@@ -107,7 +108,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
   app.post('/api/fake/v1/chat/completions', async (req, res) => {
     const d = z.object({ messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.unknown())]) })), stream: z.literal(true), __fake: z.object({ kind: z.enum(['reply','branch','rewrite']), depth: z.number().int().min(0).max(500), delay: z.number().min(0).max(250), failure: z.enum(['error','disconnect']).optional() }) }).parse(req.body);
     res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' }); res.flushHeaders();
-    const reasoning = '这是固定的模拟思考摘要，用于调试流式显示。先整理问题与引用，再用例子解释概念，最后给出清晰的回答。';
+    const reasoning = fakePrompts.reasoning;
     for (let i = 0; i < reasoning.length && !res.destroyed; i += 12) { res.write(`data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: reasoning.slice(i, i + 12) } }] })}\n\n`); if (d.__fake.delay) await delay(d.__fake.delay); }
     const text = fixture(d.__fake.kind, d.__fake.depth); const chunks = Array.from(text);
     for (let i = 0; i < chunks.length && !res.destroyed; i += 12) {

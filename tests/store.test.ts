@@ -439,3 +439,14 @@ test('empty earlier failure can be reedited without removing later conversation'
   expect(s.reeditQuestion(failed.messageId!).text).toBe('较早的问题');
   expect(s.stream(session.root_stream_id).messages.map(message => message.content_markdown)).toEqual(['后续问题', '后续回答']);
 });
+
+test('rewrite accepts more than 500 blocks and checks the fully assembled model budget', () => {
+  const { node } = root('目标块');
+  const branch = s.createBranch(node.id, 0, 2, '目标', '解释这些内容', uuid());
+  finish(branch, Array.from({ length: 505 }, (_, i) => `第${i}个说明段落`).join('\n\n'));
+  const rewrite = s.rewrite(node.id, uuid());
+  expect(s.need('generations', rewrite.generationId).context_json).toContain('第504个说明段落');
+  s.end(rewrite.generationId, 'stopped', 'STOPPED', '');
+  const small = s.models.save({ name: '小窗口', provider: 'openai', baseUrl: 'http://localhost/v1', model: 'stub', supportsImages: false, apiKey: 'stub', parameters: [{ key: 'context_length', value: 256, enabled: true }, { key: 'max_tokens', value: 1, enabled: true }] });
+  expect(() => s.rewrite(node.id, uuid(), small.id)).toThrow('上下文超过所选模型的预算');
+});

@@ -276,7 +276,6 @@ export class Store {
       while (stack.length) {
         const source = stack.pop()!;
         if (visited.has(source)) throw new AppError(409, 'INVALID_TREE', '分支关系异常'); visited.add(source);
-        if (visited.size > 500) throw new AppError(400, 'CONTEXT_TOO_LARGE', '分支过多，请从较小范围重新解释');
         for (const branch of this.all('SELECT * FROM branches WHERE source_node_id=? ORDER BY created_at,id', source)) {
           const child = this.need('streams', branch.stream_id); if (child.session_id !== this.need('streams', message.stream_id).session_id) throw new AppError(409, 'INVALID_TREE', '分支不属于当前会话');
           this.assertIdle(branch.stream_id);

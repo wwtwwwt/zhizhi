@@ -565,6 +565,9 @@ test('block context menu shares block actions, explains unavailable selections a
   await open(first);await menu.getByRole('menuitem',{name:'笔记',exact:true}).click();
   await page.getByRole('textbox',{name:'笔记内容',exact:true}).fill('菜单笔记');await page.getByRole('button',{name:'保存笔记',exact:true}).click();
   await expect(first.locator('mark')).not.toHaveCount(0);
+  await first.evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);getSelection()!.removeAllRanges();getSelection()!.addRange(range);el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));});
+  await expect(page.locator('.selection-trigger')).toHaveCount(0);
+  await expect(page.getByRole('status').filter({hasText:'选区包含已有分支'})).toHaveCount(0);
   await open(first);const disabled=menu.getByRole('menuitem',{name:'追问',exact:true});await expect(disabled).toHaveAttribute('aria-disabled','true');
   // aria-disabled remains focusable/clickable solely to explain why it is unavailable.
   await disabled.evaluate(el=>(el as HTMLButtonElement).click());await expect(page.getByRole('status').filter({hasText:'选区包含已有分支'})).toBeVisible();await expect(page.locator('.branch-dialog')).toHaveCount(0);
@@ -580,7 +583,7 @@ test('block context menu shares block actions, explains unavailable selections a
 });
 
 test('highlight context menu confirms recursive branch deletion, cancellation preserves data and confirmed deletion frees the original text', async ({page,request}) => {
-  const settings=await(await request.get('/api/settings')).json();await request.put('/api/settings',{data:{...settings,fakeDelay:0}});
+  const settings=await(await request.get('/api/settings')).json();await request.put('/api/settings',{data:{...settings,fakeDelay:0,confirmDeletion:true}});
   await page.goto('/');await page.getByRole('button',{name:'新的对话',exact:true}).click();
   await page.getByRole('textbox',{name:'输入你的问题',exact:true}).fill('删除分支测试');await page.getByRole('button',{name:'发送问题',exact:true}).click();
   const root=page.locator('.workspace .message-assistant [data-node]').first();await expect(root).toBeVisible();
@@ -589,7 +592,10 @@ test('highlight context menu confirms recursive branch deletion, cancellation pr
   const highlight=root.locator('mark').first();
   const branchId=await highlight.getAttribute('data-branch');
   await highlight.click({button:'right'});const menu=page.getByRole('menu',{name:'内容右键菜单',exact:true});
-  await expect(menu.getByRole('menuitem').first()).toHaveText('删除分支');
+  await expect(menu.getByRole('menuitem').nth(0)).toHaveText('追问');
+  await expect(menu.getByRole('menuitem').nth(1)).toHaveText('笔记');
+  await expect(menu.getByRole('menuitem').nth(2)).toHaveText('删除分支');
+  expect(await menu.locator(':scope > [role=separator]').first().evaluate(el => el.previousElementSibling?.textContent)).toBe('删除分支');
   await menu.getByRole('menuitem',{name:'删除分支',exact:true}).click();
   await expect(menu).toContainText('删除此分支？其子分支也将被同时删除');
   await menu.getByRole('button',{name:'取消',exact:true}).click();await expect(root.locator('mark')).not.toHaveCount(0);

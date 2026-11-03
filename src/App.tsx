@@ -316,7 +316,7 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
     const normalized = normalizeFormulaRange(range,body); native.removeAllRanges(); native.addRange(normalized);
     const result = readSelection();
     if (result.selection && !result.reason) onSelect(result.selection);
-    else if (result.selection && result.reason.includes('已有分支')) notify(result.reason);
+    else if (result.selection && result.reason.includes('已有分支')) onDismissSelection();
   };
   const openContextMenu = (event: React.MouseEvent) => {
     if ((event.target as HTMLElement).closest('textarea,input,[contenteditable=true],.block-menu')) return;
@@ -343,6 +343,7 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
       {contextMenu && <>
         <button role="menuitem" aria-disabled={!!contextMenu.reason} onClick={() => contextAction('question')}><GitBranch size={14}/>追问</button>
         <button role="menuitem" aria-disabled={!!contextMenu.reason} onClick={() => contextAction('note')}><StickyNote size={14}/>笔记</button>
+        {contextMenu?.branchId && <button role="menuitem" className="delete-action" onClick={() => { if (state.settings?.confirmDeletion === false) void removeBranch(); else setDeletingBranch(true); }}><Trash2 size={14}/>删除分支</button>}
         <div className="menu-separator" role="separator"/>
       </>}
       {slot.versions.length > 1 && <div className="menu-versions"><span>历史版本</span><div className="version-switcher"><button className="icon-button" aria-label="上一个版本" disabled={version <= 0} onClick={() => void changeVersion(version - 1)}><ChevronLeft size={13}/></button><span>版本 {version + 1} / {slot.versions.length}</span><button className="icon-button" aria-label="下一个版本" disabled={version >= slot.versions.length - 1} onClick={() => void changeVersion(version + 1)}><ChevronRight size={13}/></button></div></div>}
@@ -354,7 +355,6 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
       <button role="menuitem" onClick={() => { void navigator.clipboard.writeText(node.markdown).then(() => notify('已复制')).catch(() => notify('复制失败')); setMenu(false); }}><Copy size={14}/>复制块</button>
       <button role="menuitem" onClick={()=>{const raw=message?.slots.map(s=>`${s.meta.quote?'> ':''}${s.meta.marker?`${s.meta.marker==='•'?'-':s.meta.marker} `:''}${s.node.markdown}`).join('\n\n') || message?.content_markdown || '';void navigator.clipboard.writeText(raw).then(()=>notify('已复制')).catch(()=>notify('复制失败'));setMenu(false);}}><Copy size={14}/>复制整条消息</button>
       <div className="menu-separator" role="separator"/>
-      {contextMenu?.branchId && <button role="menuitem" className="delete-action" onClick={() => { if (state.settings?.confirmDeletion === false) void removeBranch(); else setDeletingBranch(true); }}><Trash2 size={14}/>删除分支</button>}
       {slot.versions.length > 1 ? <div className="menu-submenu" onMouseEnter={()=>{if(!messageBusy && !saving)setDeleteSubmenu(true);}} onMouseLeave={()=>setDeleteSubmenu(false)}>
         <button role="menuitem" className="delete-action" aria-haspopup="menu" aria-expanded={deleteSubmenu} disabled={messageBusy || saving} onClick={()=>setDeleteSubmenu(!deleteSubmenu)} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();setDeleteSubmenu(true);const target=e.currentTarget;requestAnimationFrame(()=>target.parentElement?.querySelector<HTMLButtonElement>('[role=menu] button')?.focus());}}}><Trash2 size={14}/>删除块<ChevronRight size={14}/></button>
         {deleteSubmenu && <div className="block-delete-submenu" role="menu" aria-label="删除块版本" onKeyDown={e=>{if(e.key==='ArrowLeft'){e.preventDefault();setDeleteSubmenu(false);e.currentTarget.parentElement?.querySelector<HTMLButtonElement>('button')?.focus();}}}>

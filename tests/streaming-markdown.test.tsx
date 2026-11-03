@@ -11,7 +11,9 @@ test('streamed lists use finalized block boundaries, markers and nested/quote la
   const root = parseDocument(html);
   const container = root.children.find(n => n.type === 'tag')!;
   if (container.type !== 'tag') throw new Error('missing stream container');
-  const blocks = container.children.filter(n => n.type === 'tag');
+  const body = container.children.find(n => n.type === 'tag' && n.attribs.class === 'markdown-blocks');
+  if (!body || body.type !== 'tag') throw new Error('missing shared block container');
+  const blocks = body.children.filter(n => n.type === 'tag');
   expect(blocks).toHaveLength(expected.length);
   blocks.forEach((element, i) => {
     if (element.type !== 'tag') throw new Error('missing block');

@@ -43,11 +43,13 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 ## 文档导航
 
-[工程索引](docs/README.md)列出01–12全部模块。产品／交互看01–02，模块看03，存储看04，接口看05，上下文看06，测试看07，模型附件看08，导入看09，设置数据看10，提示词看11及根目录prompts/（JSON为模板唯一来源，server/prompts.ts拼装），Electron运行及打包看12。
+[工程索引](docs/README.md)列出01–13全部模块。产品／交互看01–02，模块看03，存储看04，接口看05，上下文看06，测试看07，模型附件看08，导入看09，设置数据看10，提示词看11及根目录prompts/（JSON为模板唯一来源，server/prompts.ts拼装），Electron运行及打包看12，一致性复用建议看13（未确认项不实施）。
 
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-03：主对话与重构流式／完成预览共用隔离外边距的正文容器；列表／引用样式限定所属块直属正文，重构流式首段与完成预览共用原列表布局。2项渲染测试与2项无截图浏览器检查通过，含生产构建。其他复用建议在docs/13中等待用户确认。
 
 2026-11-03：重构预览与采用支持Markdown拆块，第一块原槽新版、其余独立；完整候选保留任务draft_markdown并通过proposal.markdown返回，节点维持不可变。29项Store／流式渲染测试及1项无截图浏览器回归通过，含生产构建。
 

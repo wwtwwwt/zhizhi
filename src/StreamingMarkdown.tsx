@@ -11,9 +11,9 @@ const StableBlock = memo(({ source, marker, quote, depth = 0, streaming = false 
 );
 export function MarkdownBlocks({ source, streaming = false, firstMeta }: { source: string; streaming?: boolean; firstMeta?: RenderMeta }) {
   const blocks = useMemo(() => splitMarkdown(source), [source]);
-  return <>{blocks.map((block, i) => <StableBlock key={i} source={block.markdown} streaming={streaming} {...(i === 0 && block.type === 'paragraph' && firstMeta?.marker ? firstMeta : block.meta)}/>)}</>;
+  return <div className="markdown-blocks">{blocks.map((block, i) => <StableBlock key={i} source={block.markdown} streaming={streaming} {...(i === 0 && block.type === 'paragraph' && firstMeta?.marker ? firstMeta : block.meta)}/>)}</div>;
 }
-export function StreamingMarkdown({ source }: { source: string }) {
+export function StreamingMarkdown({ source, firstMeta }: { source: string; firstMeta?: RenderMeta }) {
   const [visible, setVisible] = useState(source);
   const latest = useRef(source); latest.current = source;
   useEffect(() => {
@@ -22,5 +22,5 @@ export function StreamingMarkdown({ source }: { source: string }) {
   }, []);
   // Match persisted block boundaries and layout, including list markers and
   // nested indentation, instead of switching from native lists on completion.
-  return <div className="streaming-draft streaming-markdown" aria-busy="true"><MarkdownBlocks source={visible} streaming/></div>;
+  return <div className="streaming-draft streaming-markdown" aria-busy="true"><MarkdownBlocks source={visible} firstMeta={firstMeta} streaming/></div>;
 }

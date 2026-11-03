@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-11-02（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-03（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -27,6 +27,8 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 - 通用设置自动保存，无保存按钮：偏好即时应用，文本防抖450ms；失焦／离开提交待保存项，串行合并写入。模型配置（含模拟模式）使用WindowPanel弹窗，点击保存才生效；取消／关闭不落库。
 - 模型统一逐个配置，fake为固定模型并模拟reasoning；模型配置包含图片能力。输入框不再有默认模型设置，自动记住浏览器上次选择的模型；模型项悬停提示，支持复制配置。附件按图片能力处理，思考摘要与正文分离。
 - 品牌图标使用src/assets/zhizhi-mark.svg：圆形分支节点与Z形连线，用于侧栏、AI头像和网页favicon；交互中的追问／分支图标仍使用GitBranch。
+- 输入框支持剪贴板File粘贴与拖入，沿用附件限制；最新AI回答可删除本轮并恢复用户正文及附件到本流草稿前部，空失败回答右栏提供同一操作，后端事务校验并清理分支。Windows／Linux无菜单栏，macOS保留原生菜单。
+- 首页其他文档手动转换引导MinerU，论文自动转换仍用InkToMd。
 - 首页统一导入文档：Markdown在上、论文与转换入口在下；Electron原生选择自动读取同目录引用图片，缺图再选文件夹。图片可打开查看器直接滚轮缩放、左键拖拽平移、触摸板双指平移／捏合缩放，重置缩放及居中。
 - 生成时自动滚动可设置（默认开启），手动滚轮／触摸后本轮直到定稿都不再跟随；所有流复用，导入与AI段落间距一致。
 - 导入Markdown及InkToMd论文，使用固定文档头像并在旁边显示文件名；图片独立成块且不进模型上下文，主动发送的图片附件仍进上下文。
@@ -46,6 +48,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-03：MinerU手动转换入口、非macOS菜单移除、输入框粘贴／拖入附件、最新问答删除并恢复草稿已实现；28项Store／草稿／桌面协议测试、2项无截图浏览器回归及生产／Electron主进程构建通过。未在Windows实机验证原生菜单显示。
 
 2026-11-02上下文模板解耦：prompts/context.json维护全部请求自然语言模板，prompts/fake.json维护模拟摘要；server/prompts.ts只做单次变量替换与消息拼装，读取范围及原有请求文案不变。22项模板／Store／桌面协议相关测试通过，TypeScript和Electron主进程构建通过。06／11文档详细说明操作矩阵、快照、变量及后代图片仅文本引用的现有限制。
 

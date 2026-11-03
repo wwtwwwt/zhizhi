@@ -76,7 +76,7 @@ export function DocumentImport({ onClose, onImported }: { onClose: () => void; o
       <div className="document-import-actions"><button className="primary-button" disabled={busy || !file} onClick={()=>void submit('markdown')}>{busy ? <LoaderCircle size={14} className="import-spinner"/> : null}导入 Markdown</button></div>
     </section>
     <section className="import-paper-panel"><h3><Link size={16}/>论文链接</h3><form onSubmit={e=>{e.preventDefault();void submit('paper');}}><label className="field">论文链接或 arXiv ID<input aria-label="论文链接或 arXiv ID" value={url} disabled={busy} onChange={e=>{setUrl(e.target.value);setError('');}} placeholder="arxiv.org/abs/…"/></label><div className="document-import-actions"><button className="primary-button" disabled={busy || !url.trim()}>导入论文</button></div></form></section>
-    <section className="import-convert-panel"><h3><ExternalLink size={16}/>其他文档</h3><p className="import-hint">先使用 InkToMd 将 PDF、Word 等文档转换为 Markdown，再回来导入。</p><a className="secondary-button" href="https://www.inktomd.com/" target="_blank" rel="noreferrer">前往转换<ExternalLink size={13}/></a></section>
+    <section className="import-convert-panel"><h3><ExternalLink size={16}/>其他文档</h3><p className="import-hint">先使用 MinerU 将 PDF 等文档转换为 Markdown，再回来导入。</p><a className="secondary-button" href="https://mineru.net/OpenSourceTools/Extractor" target="_blank" rel="noreferrer">前往转换<ExternalLink size={13}/></a></section>
     {busy && <p className="import-hint" role="status">正在导入…</p>}{error && <p role="alert" className="import-error">{error}</p>}
   </div></WindowPanel>;
 }

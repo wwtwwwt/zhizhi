@@ -170,3 +170,5 @@ JSON 上限为 8 MiB，检查发生在图片 data URL 展开前，因此不是�
 源码：`server/store.ts` 的 refs／resolve／context／rewrite／generation／hydrate；模板拼装在 `server/prompts.ts`；请求发送在 `server/providers/chat.ts`；预算在 `shared/models.ts`；图片排除在 `shared/documents.ts`。
 
 诊断时比对冻结路径、任务消息快照和模型配置快照，不用模型自述判断它实际接收了什么。context_json 含问题、笔记与附件文本，应按用户内容保护，避免原样写入公开日志。
+
+重新编辑最新提问：`POST /messages/:id/reedit` 仅接受最新AI或空失败AI，且上一条为user、流空闲的请求；删除两条消息及相关分支，返回用户可见正文和附件供输入框编辑。恢复本身不创建任务；下一次发送按当前上下文及所选模型重新组装。

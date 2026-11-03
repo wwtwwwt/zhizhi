@@ -75,11 +75,11 @@ async function start() {
   window.webContents.setWindowOpenHandler(({url})=>{external(url);return {action:'deny'};});
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin){event.preventDefault();external(url);}});
   window.webContents.on('will-attach-webview',event=>event.preventDefault());
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform==='darwin'?[{label:'枝知',submenu:[{role:'about' as const},{type:'separator' as const},{role:'quit' as const}]}]:[]),
+  Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([
+    {label:'枝知',submenu:[{role:'about' as const},{type:'separator' as const},{role:'quit' as const}]},
     {label:'编辑',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},
     ...(development?[{label:'开发',submenu:[{role:'reload' as const},{role:'toggleDevTools' as const}]}]:[]),
-  ]));
+  ]) : null);
   await window.loadURL(origin);
   window.show();
 }

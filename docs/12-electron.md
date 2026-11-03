@@ -32,3 +32,5 @@ Release工作流使用原生Node.js 24运行时的官方Actions（checkout／set
 当前未配置开发者签名、公证和自动更新。用户负责UI视觉验收，桌面测试仅执行代码和DOM/API断言。
 
 文档导入：主进程使用系统文件选择器，server/local-document.ts读取所选Markdown及同目录树中引用的图片；通过现有鉴权本地API提供给统一导入窗口，不向渲染进程开放任意路径读写。
+
+菜单：macOS 保留应用／编辑菜单与开发菜单；Windows及Linux不设置应用菜单，避免窗口顶部出现单独的编辑菜单栏。

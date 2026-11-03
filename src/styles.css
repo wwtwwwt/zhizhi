@@ -239,3 +239,5 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 .menu-submenu>button>svg:last-child{margin-left:auto}
 .block-delete-submenu{position:fixed;left:0;top:0;min-width:166px;padding:3px;background:var(--neutral-8,#fff);border:1px solid var(--line);border-radius:5px;box-shadow:0 6px 24px #0002;z-index:30}
 .menu-submenu:focus-within>button,.menu-submenu>button:hover,.block-delete-submenu button:hover{background:var(--neutral-7,#f1f1f1)}
+
+.reedit-question{display:flex;align-items:center;gap:5px;font-size:11px;text-align:left;padding:4px 0;color:var(--neutral-2)}.reedit-question svg{flex-shrink:0}.reedit-question:hover{color:var(--neutral-0)}.reedit-confirm{font-size:11px;line-height:1.5}.reedit-confirm p{margin:0 0 5px}.reedit-confirm button{font-size:11px}

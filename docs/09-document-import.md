@@ -2,7 +2,7 @@
 
 ## 入口与消息
 
-首页「想从哪里开始？」下方统一为「导入文档」。窗口采用上方Markdown、左下论文链接、右下其他文档转换的布局；其他文档引导至https://www.inktomd.com/转换后再导入，也可直接提问。导入成功创建独立会话，首条为已完成user消息，document_name保存文件名、document_source保存论文来源。
+首页「想从哪里开始？」下方统一为「导入文档」。窗口采用上方Markdown、左下论文链接、右下其他文档转换的布局；其他文档引导至https://mineru.net/OpenSourceTools/Extractor（MinerU）转换后再导入，也可直接提问。导入成功创建独立会话，首条为已完成user消息，document_name保存文件名、document_source保存论文来源。
 
 导入不创建generation、不调用LLM，首次打开定位文档开头。文档正文自动切块，可编辑、选择追问／笔记、继续主流对话；非图片块有分支后可重新解释。
 
@@ -42,3 +42,5 @@ resolve用AST移除展示图片，不展开document_resources，普通对话、�
 转换接入曾在真实服务核查，但此处不承诺外部服务的实时可用性、额度、内容完整性或图片数量。无PDF完整性保证；自动化采用本机stub，不将转换成功推断为学习效果或LLM理解能力。
 
 桌面文件选择通过受鉴权保护的`GET /api/documents/picker`探测能力，`POST`打开系统文件选择器，返回文档及找到的引用资源；不接受前端传入任意文件路径。未找到的图片由原导入校验统一提示；仍须点击导入才写入数据库。
+
+其他文档的手动转换入口使用 [MinerU](https://mineru.net/OpenSourceTools/Extractor)，用户转换为 Markdown 后回来导入。论文链接自动转换仍使用 InkToMd，未更改其 API 或代理流程。

@@ -833,3 +833,53 @@ test('block deletion submenu offers current/all versions with icons',async({page
   await expect(sub.getByRole('menuitem',{name:'删除所有版本',exact:true}).locator('svg')).toHaveCount(1);
   await sub.getByRole('menuitem',{name:'删除当前版本',exact:true}).click();await expect(menu).toContainText('删除当前版本？此版本的分支也将删除');await menu.getByRole('button',{name:'确认删除',exact:true}).click();await expect(block.locator('[data-node]')).toHaveText('原内容');await expect(block.getByRole('button',{name:'历史版本',exact:true})).toHaveCount(0);
 });
+
+test('paste/drop attachments and reedit latest answer restore question ahead of existing draft', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { fakeDelay: 0, confirmDeletion: true } });
+  await page.goto('/'); await page.getByRole('button', { name: '新的对话', exact: true }).click();
+  const input = page.getByRole('textbox', { name: '输入你的问题', exact: true });
+  await input.fill('原来的问题');
+  await input.evaluate(el => {
+    const data = new DataTransfer(); data.items.add(new File(['粘贴的文档'], 'pasted.md', { type: 'text/markdown' }));
+    el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+  });
+  await expect(page.locator('.attachment-chip')).toContainText('pasted.md');
+  await input.evaluate(el => {
+    const data = new DataTransfer();
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmT8AAAAASUVORK5CYII='), c => c.charCodeAt(0));
+    data.items.add(new File([bytes], 'dropped.png', { type: 'image/png' }));
+    el.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data }));
+  });
+  await expect(page.locator('.attachment-chip')).toHaveCount(2);
+  await page.getByRole('button', { name: '发送问题', exact: true }).click();
+  await expect(page.locator('.workspace .message-assistant .content-block').first()).toBeVisible();
+  await input.fill('现有草稿');
+  await page.locator('.workspace .message-assistant .content-block').first().click({ button: 'right' });
+  await page.getByRole('menuitem', { name: '删除整条消息并重新提问', exact: true }).click();
+  await expect(page.getByText('删除本轮问答？相关分支也将删除，原问题将恢复到输入框', { exact: true })).toBeVisible();
+  await page.locator('.reedit-confirm').getByRole('button', { name: '确认', exact: true }).click();
+  await expect(input).toHaveValue('原来的问题\n\n现有草稿');
+  await expect(page.locator('.attachment-chip')).toHaveCount(2);
+  await expect(page.locator('.workspace .message')).toHaveCount(0);
+  // Ensure the restored attachments really survive deletion and can be sent again.
+  await page.getByRole('button', { name: '发送问题', exact: true }).click();
+  await expect(page.locator('.workspace .message-assistant .content-block').first()).toBeVisible();
+  await expect(page.locator('.workspace .message-user .message-attachments a')).toHaveCount(2);
+});
+
+test('empty failed answer offers reedit in its right rail', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { confirmDeletion: false } });
+  const response = await request.post('/api/models', { data: { name: 'local-error-stub', baseUrl: 'http://127.0.0.1:1/v1', model: 'stub', supportsImages: false, parameters: [], apiKey: 'not-a-real-key' } });
+  expect(response.ok()).toBe(true); const model = await response.json();
+  try {
+    await page.goto('/');
+    await page.evaluate(id => localStorage.setItem('lastModelId', id), model.id);
+    await page.reload(); await page.getByRole('button', { name: '新的对话', exact: true }).click();
+    const input = page.getByRole('textbox', { name: '输入你的问题', exact: true });
+    await input.fill('失败的问题'); await page.getByRole('button', { name: '发送问题', exact: true }).click();
+    const button = page.locator('.workspace .message-tools').getByRole('button', { name: '删除此消息并重新编辑', exact: true });
+    await expect(button).toBeEnabled(); await button.click();
+    await expect(input).toHaveValue('失败的问题');
+    await expect(page.locator('.workspace .message')).toHaveCount(0);
+  } finally { await request.delete(`/api/models/${model.id}`); }
+});

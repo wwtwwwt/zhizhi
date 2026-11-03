@@ -210,8 +210,28 @@ export class Store {
       return { streamIds, parentStreamId: parent.stream_id };
     });
   }
-  deleteMessage(messageId: string) {
-    return this.tx(()=>{
+  reeditQuestion(messageId: string) {
+    return this.tx(() => {
+      const answer = this.need('messages', messageId); this.assertIdle(answer.stream_id);
+      const latest = this.one("SELECT id FROM messages WHERE stream_id=? AND status!='deleted' ORDER BY ordinal DESC LIMIT 1", answer.stream_id);
+      const question = this.one("SELECT * FROM messages WHERE stream_id=? AND ordinal<? AND status!='deleted' ORDER BY ordinal DESC LIMIT 1", answer.stream_id, answer.ordinal);
+      const emptyFailure = ['error','interrupted'].includes(answer.status) && !answer.content_markdown.trim() && !this.visibleSlots(answer.id).length;
+      if (answer.role !== 'assistant' || (latest?.id !== messageId && !emptyFailure) || question?.role !== 'user') throw new AppError(409, 'NOT_LATEST_ANSWER', '只能重新编辑最新回答或空失败回答的上一条用户消息');
+      let text = this.visibleSlots(question.id).map(slot => {
+        const meta = JSON.parse(this.one('SELECT meta_json FROM node_layout WHERE node_id=?', slot.active_node_id)?.meta_json || slot.render_meta_json);
+        const prefix = `${meta.quote ? '> ' : ''}${meta.marker ? `${meta.marker === '•' ? '-' : meta.marker} ` : ''}`;
+        return prefix + this.need('content_nodes', slot.active_node_id).markdown;
+      }).join('\n\n');
+      // An imported document can also be the preceding user message. Keep its
+      // display images usable after deleting their original resource records.
+      for (const resource of this.all('SELECT * FROM document_resources WHERE message_id=?', question.id)) text = text.replaceAll(`/api/document-resources/${resource.id}`, `data:${resource.mime};base64,${Buffer.from(resource.data).toString('base64')}`);
+      const attachments = this.all('SELECT * FROM attachments WHERE message_id=? ORDER BY rowid', question.id).map(file => ({ name: file.name as string, kind: file.kind as 'image' | 'text', mime: file.mime as string, data: Buffer.from(file.data).toString(file.kind === 'image' ? 'base64' : 'utf8') }));
+      const first = this.deleteMessageInside(answer.id), second = this.deleteMessageInside(question.id);
+      return { streamIds: [...new Set([...first.streamIds, ...second.streamIds])], parentStreamId: answer.stream_id as string, text, attachments };
+    });
+  }
+  deleteMessage(messageId: string) { return this.tx(() => this.deleteMessageInside(messageId)); }
+  private deleteMessageInside(messageId: string) {
       const message=this.need('messages',messageId);this.assertIdle(message.stream_id);
       const streamIds:string[]=[];
       for(const branch of this.all('SELECT b.id FROM branches b JOIN content_nodes n ON n.id=b.source_node_id JOIN block_slots s ON s.id=n.slot_id WHERE s.message_id=?',messageId)) streamIds.push(...this.branchTree(branch.id));
@@ -221,7 +241,6 @@ export class Store {
       this.run('DELETE FROM generations WHERE target_message_id=?',messageId);
       this.pruneDeletedResources();this.touch(message.stream_id);
       return {streamIds:[...new Set(streamIds)],parentStreamId:message.stream_id};
-    });
   }
   pruneDeletedResources() {
     // Frozen snapshots in surviving branches still need their ancestor nodes.

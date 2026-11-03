@@ -12,6 +12,8 @@
 | GET /streams/:id | 消息、块、当前节点、可用版本、anchors、source、待完成重构 |
 | GET /streams/:id/context | 估算已用预算，可选sourceNodeId截取祖先前缀 |
 | POST /streams/:id/messages | text、requestId、可选modelId／attachments，保存问题与回复任务 |
+| POST /messages/:id/reedit | 原子删除最新问答或空失败问答及相关分支，返回text、attachments、streamIds、parentStreamId；流须空闲，上一条须为user |
+| DELETE /messages/:id | 删除整条消息及相关分支，返回streamIds、parentStreamId |
 | POST /branches | sourceNodeId、start、end、selectedText、requestId、kind及正文，原子创建分支 |
 | DELETE /branches/:id | 删除分支树，返回streamIds、parentStreamId |
 | PATCH /slots/:id/content | markdown、expectedActiveNodeId，编辑并重新切块 |

@@ -397,3 +397,45 @@ test('rewrite includes whole target message, excludes later conversation, and sn
   expect(s.rewrite(node.id, requestId, model.id).generationId).toBe(rewrite.generationId);
   expect(() => s.rewrite(node.id, requestId, 'fake')).toThrow('请求标识');
 });
+
+test('reedit latest answer atomically restores visible question and original attachments, deletes both trees', () => {
+  const session = s.createSession();
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmT8AAAAASUVORK5CYII=';
+  const attachments = [{ name: 'a.md', kind: 'text' as const, mime: 'text/plain', data: '附件原文' }, { name: 'a.png', kind: 'image' as const, mime: 'image/png', data: png }];
+  const g = s.appendQuestion(session.root_stream_id, '原始问题\n\n第二段', uuid(), { attachments }); finish(g, '回答');
+  const messages = s.stream(session.root_stream_id).messages;
+  const question = messages[0], answer = messages[1];
+  s.changeBlock(question.slots[0].id, question.slots[0].node.id, '已编辑的问题');
+  const branch = s.createBranch(answer.slots[0].node.id, 0, 2, '回答', '支线', uuid()); finish(branch, '子回答');
+  const child = s.stream(branch.streamId).messages[1].slots[0].node;
+  const nested = s.createBranch(child.id, 0, 2, '子回', '深层', uuid()); finish(nested, '深层回答');
+  const restored = s.reeditQuestion(answer.id);
+  expect(restored.text).toBe('已编辑的问题\n\n第二段');
+  expect(restored.attachments).toEqual(attachments);
+  expect(restored.streamIds).toContain(branch.streamId); expect(restored.streamIds).toContain(nested.streamId);
+  expect(s.stream(session.root_stream_id).messages).toHaveLength(0);
+  expect(s.all('SELECT * FROM attachments')).toHaveLength(0);
+  expect(s.all('SELECT * FROM content_nodes')).toHaveLength(0);
+  expect(s.all('SELECT * FROM generations')).toHaveLength(0);
+});
+
+test('reedit rejects non-latest, user and busy requests; empty failed answers can restore question', () => {
+  const { stream } = root();
+  const messages = s.stream(stream).messages;
+  expect(() => s.reeditQuestion(messages[0].id)).toThrow('最新回答');
+  const next = s.appendQuestion(stream, '下一条', uuid());
+  expect(() => s.reeditQuestion(next.messageId!)).toThrow('正在生成');
+  s.end(next.generationId, 'error', 'TEST', '');
+  expect(() => s.reeditQuestion(messages[1].id)).toThrow('最新回答');
+  const restored = s.reeditQuestion(next.messageId!);
+  expect(restored.text).toBe('下一条');
+  expect(s.stream(stream).messages).toHaveLength(2);
+});
+
+test('empty earlier failure can be reedited without removing later conversation', () => {
+  const session = s.createSession();
+  const failed = s.appendQuestion(session.root_stream_id, '较早的问题', uuid()); s.end(failed.generationId, 'error', 'TEST', '');
+  const later = s.appendQuestion(session.root_stream_id, '后续问题', uuid()); finish(later, '后续回答');
+  expect(s.reeditQuestion(failed.messageId!).text).toBe('较早的问题');
+  expect(s.stream(session.root_stream_id).messages.map(message => message.content_markdown)).toEqual(['后续问题', '后续回答']);
+});

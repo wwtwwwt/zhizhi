@@ -4,6 +4,7 @@ import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, 
 import { createPortal } from 'react-dom';
 import { useCenteredResize } from './useCenteredResize';
 import { layoutSideItems, type Corner } from '../shared/workspace-layout';
+import { ReeditQuestion } from './ReeditQuestion';
 import { ReasoningPanel } from './ReasoningPanel';
 import { SendComposer, composerModelId } from './SendComposer';
 import { ImportActions } from './DocumentImport';
@@ -206,7 +207,7 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
       <div className="message-content">{message.attachments && message.attachments.length > 0 && <div className="message-attachments">{message.attachments.map(a => <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" title={a.name}>{a.kind === 'image' ? <img src={`/api/attachments/${a.id}`} alt={a.name}/> : <span>TXT</span>}<small>{a.name}</small></a>)}</div>}{(job?.reasoning || message.reasoning_text) && <ReasoningPanel text={job?.reasoning || message.reasoning_text || ''} simulated={message.model_label === '模拟模式'} startedAt={job?.reasoningStartedAt} endedAt={job?.reasoningEndedAt}/>}{message.slots.map(slot => <BlockView key={slot.id} messageId={message.id} slot={slot} role={message.role} toolsHost={toolsHost} {...props}/>)}
       {pending && <div className="streaming-container" aria-live="off">{job?.text || message.content_markdown ? <StreamingMarkdown source={job?.text || message.content_markdown}/> : <span className="thinking">正在整理思路<span>···</span></span>}</div>}
       {!pending && message.status !== 'complete' && <div className="failed-message">{message.status !== 'stopped' && !message.slots.length && message.content_markdown && <div className="stopped-draft markdown"><Markdown source={message.content_markdown}/></div>}<span>{message.status === 'stopped' ? '已停止生成' : '回答未完成'}</span></div>}
-      </div><aside className="message-tools" aria-label="右侧功能区" ref={setToolsHost}/></div>
+      </div><aside className="message-tools" aria-label="右侧功能区" ref={setToolsHost}>{!pending && ['error','interrupted'].includes(message.status) && !message.content_markdown.trim() && !message.slots.length && <ReeditQuestion messageId={message.id} streamId={message.stream_id} label="删除此消息并重新编辑"/>}</aside></div>
     </div>
   </article>;
 }
@@ -362,6 +363,7 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
         </div>}
       </div> : <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>requestBlockDelete('all')}><Trash2 size={14}/>删除块</button>}
       <button role="menuitem" className="delete-action" disabled={messageBusy || saving} onClick={()=>{if(state.settings?.confirmDeletion===false)void removeMessage();else setDeletingMessage(true);}}><Trash2 size={14}/>删除整条消息</button>
+      {contextMenu && <ReeditQuestion messageId={messageId} streamId={streamId!} menu onDone={()=>setMenu(false)}/>}
     </>}</div>;
   return <div className={`content-block document-block ${menu ? 'menu-open' : ''} ${slot.meta.quote ? 'quoted' : ''} ${slot.meta.marker ? 'list-block' : ''}`} style={{ marginLeft: (slot.meta.depth || 0) * 20 }} data-slot={slot.id} onContextMenu={openContextMenu}>
     {!editing && <div className="block-handles">{slot.versions.length > 1 && <button className="block-history" aria-label="历史版本" title="历史版本" onClick={() => { setContextMenu(null); setMenu(!menu); setDeleting(false); setDeletingBranch(false); }}><History size={16}/></button>}<button ref={handleRef} className="block-handle" aria-label="块操作" aria-haspopup="menu" aria-expanded={menu} title="块操作" onClick={() => { setContextMenu(null); setMenu(!menu); setDeleting(false); setDeletingBranch(false); }}><GripVertical size={16}/></button></div>}

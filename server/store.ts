@@ -90,7 +90,7 @@ export class Store {
         return { ...s, meta: JSON.parse(this.one('SELECT meta_json FROM node_layout WHERE node_id=?', node.id)?.meta_json || s.render_meta_json), node,
           versions: this.all("SELECT * FROM content_nodes WHERE slot_id=? AND status='available' ORDER BY version_no", s.id),
           anchors: this.all('SELECT * FROM branches WHERE source_node_id=? ORDER BY start_offset', node.id).map(a => ({ ...a, preview: this.branchPreview(a.stream_id) })),
-          proposals: this.all("SELECT * FROM rewrite_proposals WHERE source_node_id=? AND status='pending'", node.id).map(p => ({ id: p.id, node: this.need('content_nodes', p.candidate_node_id) })),
+          proposals: this.all("SELECT * FROM rewrite_proposals WHERE source_node_id=? AND status='pending'", node.id).map(p => ({ id: p.id, node: this.need('content_nodes', p.candidate_node_id), markdown: this.need('generations', p.generation_id).draft_markdown })),
         } as Slot;
       }),
     }));
@@ -297,7 +297,13 @@ export class Store {
       if (g.kind === 'rewrite') {
         const source = this.need('content_nodes', g.source_node_id), nid = id(), pid = id();
         const version = Number(this.one('SELECT MAX(version_no)+1 AS n FROM content_nodes WHERE slot_id=?', source.slot_id)!.n);
-        this.run('INSERT INTO content_nodes VALUES(?,?,?,?,?,?,?,?,?)', nid, source.slot_id, version, source.id, markdown, nodeTree(markdown).text, splitMarkdown(markdown)[0]?.type || 'paragraph', 'candidate', now());
+        const first = splitMarkdown(markdown)[0];
+        if (!first) throw new AppError(502, 'EMPTY_OUTPUT', '模型未返回正文');
+        const sourceSlot = this.need('block_slots', source.slot_id);
+        const oldMeta = JSON.parse(this.one('SELECT meta_json FROM node_layout WHERE node_id=?', source.id)?.meta_json || sourceSlot.render_meta_json);
+        if (first.type === 'paragraph' && oldMeta.marker) first.meta = oldMeta;
+        this.run('INSERT INTO content_nodes VALUES(?,?,?,?,?,?,?,?,?)', nid, source.slot_id, version, source.id, first.markdown, first.text, first.type, 'candidate', now());
+        this.run('INSERT INTO node_layout VALUES(?,?)', nid, JSON.stringify(first.meta));
         this.run("INSERT INTO rewrite_proposals VALUES(?,?,?,?,'pending')", pid, gid, source.id, nid); result = { ...result, proposalId: pid, candidateNodeId: nid };
       } else { this.run('UPDATE messages SET reasoning_text=? WHERE id=?', g.reasoning_text || '', g.target_message_id); this.finalizeMessage(g.target_message_id, markdown); result.messageId = g.target_message_id; }
       this.run("UPDATE generations SET status='complete',draft_markdown=?,finished_at=? WHERE id=?", markdown, now(), gid); this.touch(g.stream_id); return result;
@@ -384,6 +390,22 @@ export class Store {
     });
   }
   decideProposal(pid: string, accept: boolean, expected?: string) {
-    this.tx(() => { const p = this.need('rewrite_proposals', pid); if (p.status !== 'pending') throw new AppError(409, 'PROPOSAL_ENDED', '这个预览已经处理'); const node = this.need('content_nodes', p.candidate_node_id), slot = this.need('block_slots', node.slot_id); if (accept && (slot.active_node_id !== expected || expected !== p.source_node_id)) throw new AppError(409, 'VERSION_CONFLICT', '原文版本已切换，请保留原文后重新生成'); this.run('UPDATE content_nodes SET status=? WHERE id=?', accept ? 'available' : 'discarded', node.id); if (accept) this.run('UPDATE block_slots SET active_node_id=? WHERE id=?', node.id, slot.id); this.run('UPDATE rewrite_proposals SET status=? WHERE id=?', accept ? 'accepted' : 'rejected', pid); });
+    this.tx(() => {
+      const p = this.need('rewrite_proposals', pid);
+      if (p.status !== 'pending') throw new AppError(409, 'PROPOSAL_ENDED', '这个预览已经处理');
+      const node = this.need('content_nodes', p.candidate_node_id), slot = this.need('block_slots', node.slot_id);
+      if (accept) {
+        if (slot.active_node_id !== expected || expected !== p.source_node_id) throw new AppError(409, 'VERSION_CONFLICT', '原文版本已切换，请保留原文后重新生成');
+        this.assertVisible(slot);
+        this.assertIdle(this.need('messages', slot.message_id).stream_id);
+        const blocks = splitMarkdown(this.need('generations', p.generation_id).draft_markdown);
+        if (!blocks.length) throw new AppError(422, 'EMPTY_BLOCK', '内容不能为空');
+        this.run("UPDATE content_nodes SET status='available' WHERE id=?", node.id);
+        this.run('UPDATE block_slots SET active_node_id=? WHERE id=?', node.id, slot.id);
+        this.insertBlocks(slot, blocks.slice(1));
+        this.touch(this.need('messages', slot.message_id).stream_id);
+      } else this.run("UPDATE content_nodes SET status='discarded' WHERE id=?", node.id);
+      this.run('UPDATE rewrite_proposals SET status=? WHERE id=?', accept ? 'accepted' : 'rejected', pid);
+    });
   }
 }

@@ -450,3 +450,35 @@ test('rewrite accepts more than 500 blocks and checks the fully assembled model 
   const small = s.models.save({ name: '小窗口', provider: 'openai', baseUrl: 'http://localhost/v1', model: 'stub', supportsImages: false, apiKey: 'stub', parameters: [{ key: 'context_length', value: 256, enabled: true }, { key: 'max_tokens', value: 1, enabled: true }] });
   expect(() => s.rewrite(node.id, uuid(), small.id)).toThrow('上下文超过所选模型的预算');
 });
+
+test('accepted rewrite splits like manual edit; extra blocks survive source version changes and deletion', () => {
+  const { stream, node } = root('原文\n\n原来的后段');
+  const branch = s.createBranch(node.id, 0, 2, '原文', '追问', uuid()); finish(branch, '说明');
+  const output = '新的第一段\n\n- 新的列表项\n\n新的末段';
+  const rejected = finish(s.rewrite(node.id, uuid()), output);
+  s.decideProposal(rejected.proposalId, false);
+  expect(s.stream(stream).messages[1].slots).toHaveLength(2);
+  const proposal = finish(s.rewrite(node.id, uuid()), output);
+  expect(s.stream(stream).messages[1].slots).toHaveLength(2);
+  s.decideProposal(proposal.proposalId, true, node.id);
+  const slots = s.stream(stream).messages[1].slots;
+  expect(slots.map(slot => slot.node.markdown)).toEqual(['新的第一段', '新的列表项', '新的末段', '原来的后段']);
+  expect(slots[0].node.id).toBe(proposal.candidateNodeId);
+  expect(slots[1].meta.marker).toBe('•');
+  expect(slots[1].versions).toHaveLength(1);
+  expect(s.need('content_nodes', slots[1].node.id).source_node_id).toBeNull();
+  s.switchVersion(node.slot_id, node.id, proposal.candidateNodeId);
+  expect(s.stream(stream).messages[1].slots.map(slot => slot.node.markdown)).toEqual(['原文', '新的列表项', '新的末段', '原来的后段']);
+  s.changeBlock(node.slot_id, node.id);
+  expect(s.stream(stream).messages[1].slots.map(slot => slot.id)).toEqual(slots.slice(1).map(slot => slot.id));
+  expect(JSON.stringify(s.context(stream))).toContain('新的末段');
+});
+
+test('rewrite of list body retains first marker while splitting later paragraphs independently', () => {
+  const { stream, node } = root('3. 原列表项\n4. 后续列表项');
+  const branch = s.createBranch(node.id, 0, 2, '原列', '追问', uuid()); finish(branch, '说明');
+  const proposal = finish(s.rewrite(node.id, uuid()), '替换列表正文\n\n额外独立段落');
+  s.decideProposal(proposal.proposalId, true, node.id);
+  const slots = s.stream(stream).messages[1].slots;
+  expect(slots.map(slot => slot.meta.marker)).toEqual(['3.', undefined, '4.']);
+});

@@ -889,3 +889,25 @@ test('empty failed answer offers reedit in its right rail', async ({ page, reque
     await expect(page.locator('.workspace .message')).toHaveCount(0);
   } finally { await request.delete(`/api/models/${model.id}`); }
 });
+
+test('rewrite preview and adoption split paragraphs into independent blocks', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { fakeDelay: 0 } });
+  await page.goto('/'); await page.getByRole('button', { name: '新的对话', exact: true }).click();
+  await page.getByRole('textbox', { name: '输入你的问题', exact: true }).fill('重构拆块测试');
+  await page.getByRole('button', { name: '发送问题', exact: true }).click();
+  const root = page.locator('.workspace .message-assistant .message-content > .content-block').first();
+  await expect(root).toBeVisible();
+  await branch(page, root.locator('[data-node]'), '梯度下降', '解释一下'); await closeBranch(page);
+  const blocks = page.locator('.workspace .message-assistant .message-content > .content-block');
+  const originalCount = await blocks.count();
+  await (await blockMenu(root)).getByRole('menuitem', { name: '结合追问重新回答', exact: true }).click();
+  await expect(root.locator('.rewrite-blocks > .content-block')).toHaveCount(3);
+  await root.getByRole('button', { name: '采用新版', exact: true }).click();
+  await expect(blocks).toHaveCount(originalCount + 2);
+  await expect(root.locator('[data-node]')).not.toContainText('例如，');
+  await expect(blocks.nth(1).locator('[data-node]')).toContainText('例如，');
+  const extraId = await blocks.nth(1).getAttribute('data-slot');
+  await changeVersion(root, '上一个版本');
+  expect(await blocks.nth(1).getAttribute('data-slot')).toBe(extraId);
+  await expect(blocks.nth(1).locator('[data-node]')).toContainText('例如，');
+});

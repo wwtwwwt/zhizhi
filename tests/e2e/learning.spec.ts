@@ -954,15 +954,16 @@ test('sidebar folders drag sessions, preserve recent dates and release chats on 
     const dragSource = page.locator('.session-row').filter({ has: page.getByRole('button', { name: first.title, exact: true }) });
     await dragSource.dispatchEvent('dragstart', { dataTransfer: transfer });
     await aRow.dispatchEvent('dragover', { dataTransfer: transfer, clientX: 80, clientY: 150 });
-    await expect(page.getByRole('tooltip')).toContainText(`移入「${a.name}」末尾`);
+    await expect(page.locator('.sidebar-drag-hint')).toHaveCount(0);
     await expect(aRow).toHaveClass(/drop-inside/);
     await page.locator('.recent-section').dispatchEvent('dragover', { dataTransfer: transfer, clientX: 80, clientY: 300 });
-    await expect(page.getByRole('tooltip')).toContainText('按日期排序');
+    await expect(page.locator('.recent-section')).not.toHaveClass(/drop-inside/);
+    await expect(aRow).not.toHaveClass(/drop-inside/);
     await dragSource.dispatchEvent('dragend', { dataTransfer: transfer });
     await expect(page.getByRole('tooltip')).toHaveCount(0);
     await aRow.dispatchEvent('dragstart', { dataTransfer: transfer });
     await aRow.dispatchEvent('dragover', { dataTransfer: transfer, clientX: 80, clientY: 150 });
-    await expect(page.getByRole('tooltip')).toContainText('不能移动到自身');
+    await expect(page.locator('.sidebar-drag-hint')).toHaveCount(0);
     await expect(aRow).not.toHaveClass(/drop-inside/);
     await aRow.dispatchEvent('dragend', { dataTransfer: transfer });
 
@@ -971,6 +972,18 @@ test('sidebar folders drag sessions, preserve recent dates and release chats on 
     // Dragging into a folder expands it automatically; ensure children are visible.
     if (!await folder(child.name).isVisible()) await aRow.getByRole('button', { name: a.name, exact: true }).click();
     await expect(row(first.title)).toBeVisible();
+    await expect(page.getByText('拖入对话', { exact: true })).toHaveCount(0);
+    await row(first.title).dispatchEvent('dragstart', { dataTransfer: transfer });
+    const firstLink = row(first.title).locator('.session-link');
+    await aRow.locator('.folder-link span').dispatchEvent('dragover', { dataTransfer: transfer });
+    await expect(aRow).toHaveClass(/drop-inside/);
+    await firstLink.dispatchEvent('dragover', { dataTransfer: transfer });
+    await expect(aRow).not.toHaveClass(/drop-inside/);
+    const children = aRow.locator('..').locator(':scope > .folder-children');
+    await children.dispatchEvent('dragover', { dataTransfer: transfer });
+    await expect(page.locator('.sidebar-lists .drop-inside, .sidebar-lists .drop-before')).toHaveCount(0);
+    await row(first.title).dispatchEvent('dragend', { dataTransfer: transfer });
+
     await row(second.title).dragTo(aRow);
     await row(second.title).dragTo(row(first.title));
     const members = await (await request.get('/api/sessions')).json();

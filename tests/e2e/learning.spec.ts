@@ -950,6 +950,22 @@ test('sidebar folders drag sessions, preserve recent dates and release chats on 
     await page.goto('/');
     const folder = (name: string) => page.locator('.folder-row').filter({ has: page.getByRole('button', { name, exact: true }) });
     const aRow = folder(a.name), bRow = folder(b.name);
+    const transfer = await page.evaluateHandle(() => new DataTransfer());
+    const dragSource = page.locator('.session-row').filter({ has: page.getByRole('button', { name: first.title, exact: true }) });
+    await dragSource.dispatchEvent('dragstart', { dataTransfer: transfer });
+    await aRow.dispatchEvent('dragover', { dataTransfer: transfer, clientX: 80, clientY: 150 });
+    await expect(page.getByRole('tooltip')).toContainText(`移入「${a.name}」末尾`);
+    await expect(aRow).toHaveClass(/drop-inside/);
+    await page.locator('.recent-section').dispatchEvent('dragover', { dataTransfer: transfer, clientX: 80, clientY: 300 });
+    await expect(page.getByRole('tooltip')).toContainText('按日期排序');
+    await dragSource.dispatchEvent('dragend', { dataTransfer: transfer });
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    await aRow.dispatchEvent('dragstart', { dataTransfer: transfer });
+    await aRow.dispatchEvent('dragover', { dataTransfer: transfer, clientX: 80, clientY: 150 });
+    await expect(page.getByRole('tooltip')).toContainText('不能移动到自身');
+    await expect(aRow).not.toHaveClass(/drop-inside/);
+    await aRow.dispatchEvent('dragend', { dataTransfer: transfer });
+
     const row = (name: string) => page.locator('.session-row').filter({ has: page.getByRole('button', { name, exact: true }) });
     await row(first.title).dragTo(aRow); await aRow.getByRole('button', { name: a.name, exact: true }).click();
     // Dragging into a folder expands it automatically; ensure children are visible.

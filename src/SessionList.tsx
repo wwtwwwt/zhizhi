@@ -1,4 +1,4 @@
-import { useEffect, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { ChevronRight, Folder as FolderIcon, FolderPlus, MessageSquare, Pencil, Plus, Trash2 } from 'lucide-react';
 import { api, notify, refreshSessions, useAppState } from './client';
 import type { Folder, Session } from '../shared/types';
@@ -11,17 +11,47 @@ export function SessionList({ selectedId, onChoose, onManage }: { selectedId: st
   const [expanded, setExpanded] = useState<string[]>(() => { try { const value = JSON.parse(localStorage.getItem('expandedFolders') || '[]'); return Array.isArray(value) ? value.filter(v => typeof v === 'string') : []; } catch { return []; } });
   const [dialog, setDialog] = useState<{ kind: 'create' | 'rename' | 'delete'; folder?: Folder; parentId?: string | null } | null>(null);
   const [name, setName] = useState(''), [saving, setSaving] = useState(false), [dropTarget, setDropTarget] = useState('');
+  const dragging = useRef<DragItem | null>(null);
+  const [dragHint, setDragHint] = useState<{ text: string; invalid: boolean; x: number; y: number } | null>(null);
+  const endDrag = () => { dragging.current = null; setDropTarget(''); setDragHint(null); };
+  const describeDrop = (item: DragItem, target: string) => {
+    const beforeFolder = target.startsWith('before:') ? folders.find(f => f.id === target.slice(7)) : undefined;
+    const beforeSession = state.sessions.find(s => s.id === target);
+    const destination = beforeFolder ? beforeFolder.parent_id : beforeSession ? beforeSession.folder_id : target.startsWith('end:') ? target.slice(4) : ['root','recent'].includes(target) ? null : target;
+    const folder = folders.find(f => f.id === destination);
+    if (item.kind === 'folder') {
+      const source = folders.find(f => f.id === item.id);
+      if (target === 'recent' || beforeSession) return { text: '文件夹不能放入最近对话或对话中', invalid: true };
+      if (beforeFolder?.id === item.id || destination === item.id) return { text: '不能移动到自身', invalid: true };
+      if (folder && (folder.parent_id || folders.some(f => f.parent_id === item.id))) return { text: '最多支持两级文件夹', invalid: true };
+      if (source && folders.some(f => f.id !== item.id && f.parent_id === destination && f.name === source.name)) return { text: '目标位置有同名文件夹', invalid: true };
+      return { text: beforeFolder ? `移到「${beforeFolder.name}」之前` : folder ? `移入「${folder.name}」` : '移到文件夹根目录末尾', invalid: false };
+    }
+    if (beforeFolder) return { text: '请拖到文件夹名称上以移入', invalid: true };
+    if (beforeSession?.id === item.id) return { text: '当前位置不变', invalid: true };
+    if (beforeSession) return { text: `移入「${folder?.name || ''}」，放在「${beforeSession.title}」之前`, invalid: false };
+    return { text: folder ? `移入「${folder.name}」末尾` : '移回最近对话，按日期排序', invalid: false };
+  };
   const refresh = async () => setFolders(await api<Folder[]>('/folders'));
   useEffect(() => { void refresh().catch(e => notify(e.message)); }, []);
   useEffect(() => { localStorage.setItem('expandedFolders', JSON.stringify(expanded)); }, [expanded]);
   const toggle = (id: string) => setExpanded(prev => prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]);
   const open = (value: NonNullable<typeof dialog>) => { setDialog(value); setName(value.kind === 'rename' ? value.folder!.name : ''); };
   const removeFolder = async (folder: Folder) => { try { await api(`/folders/${folder.id}`, 'DELETE'); await refresh(); await refreshSessions(); } catch (error) { notify((error as Error).message); } };
-  const start = (e: DragEvent, item: DragItem) => { e.stopPropagation(); e.dataTransfer.setData(dragType, JSON.stringify(item)); e.dataTransfer.effectAllowed = 'move'; };
+  const start = (e: DragEvent, item: DragItem) => { e.stopPropagation(); dragging.current = item; setDragHint({ text: item.kind === 'session' ? '拖到文件夹移入；拖到对话前调整顺序' : '拖到文件夹移入，或拖到插入线调整顺序', invalid: false, x: e.clientX, y: e.clientY }); e.dataTransfer.setData(dragType, JSON.stringify(item)); e.dataTransfer.effectAllowed = 'move'; };
   const read = (e: DragEvent): DragItem | null => { try { const item = JSON.parse(e.dataTransfer.getData(dragType)); return ['folder', 'session'].includes(item.kind) && typeof item.id === 'string' ? item : null; } catch { return null; } };
-  const over = (e: DragEvent, target: string) => { if (!e.dataTransfer.types.includes(dragType)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; setDropTarget(target); };
+  const over = (e: DragEvent, target: string) => {
+    if (!e.dataTransfer.types.includes(dragType)) return;
+    e.preventDefault(); e.stopPropagation();
+    const item = dragging.current;
+    const hint = item ? describeDrop(item, target) : { text: '无法放置', invalid: true };
+    e.dataTransfer.dropEffect = hint.invalid ? 'none' : 'move';
+    setDropTarget(hint.invalid ? '' : target); setDragHint({ ...hint, x: e.clientX, y: e.clientY });
+  };
   const drop = async (e: DragEvent, folderId: string | null, beforeSessionId?: string, beforeFolderId?: string) => {
-    e.preventDefault(); e.stopPropagation(); setDropTarget(''); const item = read(e); if (!item) return;
+    e.preventDefault(); e.stopPropagation(); const item = read(e);
+    const target = beforeFolderId ? `before:${beforeFolderId}` : beforeSessionId || folderId || (item?.kind === 'folder' ? 'root' : 'recent');
+    const invalid = !item || describeDrop(item, target).invalid; endDrag(); if (invalid || !item) return;
     if (item.id === beforeSessionId || item.id === beforeFolderId) return;
     try {
       if (item.kind === 'session') await api(`/sessions/${item.id}/move`, 'POST', { folderId, beforeId: beforeSessionId });
@@ -30,7 +60,7 @@ export function SessionList({ selectedId, onChoose, onManage }: { selectedId: st
       await refresh(); await refreshSessions();
     } catch (error) { notify((error as Error).message); }
   };
-  const sessionRow = (session: Session, inFolder: boolean) => <div className={`session-row ${selectedId === session.id ? 'active' : ''} ${dropTarget === session.id ? 'drop-before' : ''}`} key={session.id} draggable onDragStart={e => start(e, { kind: 'session', id: session.id })} onDragEnd={() => setDropTarget('')} onDragOver={inFolder ? e => over(e, session.id) : undefined} onDrop={inFolder ? e => void drop(e, session.folder_id!, session.id) : undefined}>
+  const sessionRow = (session: Session, inFolder: boolean) => <div className={`session-row ${selectedId === session.id ? 'active' : ''} ${dropTarget === session.id ? 'drop-before' : ''}`} key={session.id} draggable onDragStart={e => start(e, { kind: 'session', id: session.id })} onDragEnd={endDrag} onDragOver={inFolder ? e => over(e, session.id) : undefined} onDrop={inFolder ? e => void drop(e, session.folder_id!, session.id) : undefined}>
     <button className="session-link" onClick={() => onChoose(session.id)}><MessageSquare size={14}/><span>{session.title}</span></button>
     <div className="session-actions"><button className="icon-button" title="重命名" onClick={() => onManage(session, 'rename')}><Pencil size={13}/></button><button className="icon-button" title="删除对话" onClick={() => onManage(session, 'delete')}><Trash2 size={13}/></button></div>
   </div>;
@@ -40,15 +70,15 @@ export function SessionList({ selectedId, onChoose, onManage }: { selectedId: st
     const isOpen = expanded.includes(folder.id);
     return <div className="folder-entry" key={folder.id}>
       <div className={`folder-insert ${dropTarget === `before:${folder.id}` ? 'drop-before' : ''}`} aria-label={`移动到${folder.name}之前`} onDragOver={e => over(e, `before:${folder.id}`)} onDrop={e => void drop(e, folder.parent_id, undefined, folder.id)}/>
-      <div className={`folder-row ${dropTarget === folder.id ? 'drop-inside' : ''}`} draggable onDragStart={e => start(e, { kind: 'folder', id: folder.id })} onDragEnd={() => setDropTarget('')} onDragOver={e => over(e, folder.id)} onDrop={e => void drop(e, folder.id)}>
+      <div className={`folder-row ${dropTarget === folder.id ? 'drop-inside' : ''}`} draggable onDragStart={e => start(e, { kind: 'folder', id: folder.id })} onDragEnd={endDrag} onDragOver={e => over(e, folder.id)} onDrop={e => void drop(e, folder.id)}>
         <button className="folder-link" aria-expanded={isOpen} onClick={() => toggle(folder.id)}><ChevronRight className={isOpen ? 'expanded' : ''} size={12}/><FolderIcon size={14}/><span>{folder.name}</span></button>
         <div className="session-actions">{!folder.parent_id && <button className="icon-button" title="新建子文件夹" onClick={() => open({ kind: 'create', parentId: folder.id })}><FolderPlus size={13}/></button>}<button className="icon-button" title="重命名文件夹" onClick={() => open({ kind: 'rename', folder })}><Pencil size={13}/></button><button className="icon-button" title="删除文件夹" onClick={() => { if (state.settings?.confirmDeletion === false) void removeFolder(folder); else open({ kind: 'delete', folder }); }}><Trash2 size={13}/></button></div>
       </div>
       {isOpen && <div className="folder-children" onDragOver={e => over(e, folder.id)} onDrop={e => void drop(e, folder.id)}>{children.map(renderFolder)}{sessions.map(s => sessionRow(s, true))}<div className={`folder-append ${dropTarget === `end:${folder.id}` ? 'drop-inside' : ''}`} onDragOver={e => over(e, `end:${folder.id}`)} onDrop={e => void drop(e, folder.id)}>{!children.length && !sessions.length ? '拖入对话' : ''}</div></div>}
     </div>;
   };
-  return <><div className="sidebar-lists" onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(''); }}>
-    <section className="folder-section"><div className="sidebar-label"><span>文件夹</span><button className="icon-button" title="新建文件夹" onClick={() => open({ kind: 'create', parentId: null })}><Plus size={13}/></button></div><nav className="folder-scroll" aria-label="文件夹">{folders.filter(f => !f.parent_id).map(renderFolder)}<div className={`folder-root-drop ${dropTarget === 'root' ? 'drop-inside' : ''}`} onDragOver={e => over(e, 'root')} onDrop={e => void drop(e, null)}>{folders.length ? '' : '暂无文件夹'}</div></nav></section>
-    <section className={`recent-section ${dropTarget === 'recent' ? 'drop-inside' : ''}`} onDragOver={e => over(e, 'recent')} onDrop={e => { const item = read(e); if (item?.kind === 'session') void drop(e, null); else { e.preventDefault(); setDropTarget(''); } }}><div className="sidebar-label">最近对话</div><nav className="sessions" aria-label="对话列表">{state.sessions.filter(s => !s.folder_id).map(s => sessionRow(s, false))}{!state.sessions.some(s => !s.folder_id) && <p className="sidebar-empty">暂无对话</p>}</nav></section>
-  </div>{dialog && <div className="manage-backdrop" onKeyDown={e => { if (e.key === 'Escape' && !saving) { e.stopPropagation(); setDialog(null); } }}><form className="manage-dialog" role="dialog" aria-modal="true" aria-label={dialog.kind === 'delete' ? '删除文件夹' : dialog.kind === 'rename' ? '重命名文件夹' : '新建文件夹'} onSubmit={async e => { e.preventDefault(); if (saving) return; setSaving(true); try { if (dialog.kind === 'delete') await api(`/folders/${dialog.folder!.id}`, 'DELETE'); else await api(dialog.kind === 'create' ? '/folders' : `/folders/${dialog.folder!.id}`, dialog.kind === 'create' ? 'POST' : 'PATCH', { name: name.trim(), parentId: dialog.parentId }); if (dialog.parentId) setExpanded(prev => [...new Set([...prev, dialog.parentId!])]); await refresh(); await refreshSessions(); setDialog(null); } catch (error) { notify((error as Error).message); } finally { setSaving(false); } }}><h3>{dialog.kind === 'delete' ? `删除“${dialog.folder!.name}”？` : dialog.kind === 'rename' ? '重命名文件夹' : '新建文件夹'}</h3>{dialog.kind === 'delete' ? <p>其中的对话将移回最近对话，不会删除聊天内容。</p> : <input autoFocus aria-label="文件夹名称" required maxLength={80} value={name} onChange={e => setName(e.target.value)}/>}<div className="dialog-actions"><button type="button" className="secondary-button" disabled={saving} onClick={() => setDialog(null)}>取消</button><button className={dialog.kind === 'delete' ? 'danger-button' : 'primary-button'} disabled={saving || dialog.kind !== 'delete' && !name.trim()}>{dialog.kind === 'delete' ? '删除' : '确认'}</button></div></form></div>}</>;
+  return <><div className={`sidebar-lists ${dragHint ? 'dragging-sidebar' : ''}`} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) { setDropTarget(''); setDragHint(null); } }}>
+    <section className="folder-section"><div className="sidebar-label"><span>文件夹</span><button className="icon-button" title="新建文件夹" onClick={() => open({ kind: 'create', parentId: null })}><Plus size={13}/></button></div><nav className="folder-scroll" aria-label="文件夹">{folders.filter(f => !f.parent_id).map(renderFolder)}<div className={`folder-root-drop ${dropTarget === 'root' ? 'drop-inside' : ''}`} onDragOver={e => over(e, 'root')} onDrop={e => void drop(e, null)}>{dragHint ? dragging.current?.kind === 'folder' ? '移到根目录末尾' : '移回最近对话' : folders.length ? '' : '暂无文件夹'}</div></nav></section>
+    <section className={`recent-section ${dropTarget === 'recent' ? 'drop-inside' : ''}`} onDragOver={e => over(e, 'recent')} onDrop={e => { const item = read(e); if (item?.kind === 'session') void drop(e, null); else { e.preventDefault(); endDrag(); } }}><div className="sidebar-label">最近对话</div><nav className="sessions" aria-label="对话列表">{state.sessions.filter(s => !s.folder_id).map(s => sessionRow(s, false))}{!state.sessions.some(s => !s.folder_id) && <p className="sidebar-empty">暂无对话</p>}</nav></section>
+  </div>{dragHint && <div className={`sidebar-drag-hint ${dragHint.invalid ? 'invalid' : ''}`} role="tooltip" style={{ left: Math.max(8, Math.min(dragHint.x + 16, innerWidth - 260)), top: Math.max(8, Math.min(dragHint.y + 18, innerHeight - 80)) }}><span aria-hidden="true">{dragHint.invalid ? '⊘' : '↳'}</span>{dragHint.text}</div>}{dialog && <div className="manage-backdrop" onKeyDown={e => { if (e.key === 'Escape' && !saving) { e.stopPropagation(); setDialog(null); } }}><form className="manage-dialog" role="dialog" aria-modal="true" aria-label={dialog.kind === 'delete' ? '删除文件夹' : dialog.kind === 'rename' ? '重命名文件夹' : '新建文件夹'} onSubmit={async e => { e.preventDefault(); if (saving) return; setSaving(true); try { if (dialog.kind === 'delete') await api(`/folders/${dialog.folder!.id}`, 'DELETE'); else await api(dialog.kind === 'create' ? '/folders' : `/folders/${dialog.folder!.id}`, dialog.kind === 'create' ? 'POST' : 'PATCH', { name: name.trim(), parentId: dialog.parentId }); if (dialog.parentId) setExpanded(prev => [...new Set([...prev, dialog.parentId!])]); await refresh(); await refreshSessions(); setDialog(null); } catch (error) { notify((error as Error).message); } finally { setSaving(false); } }}><h3>{dialog.kind === 'delete' ? `删除“${dialog.folder!.name}”？` : dialog.kind === 'rename' ? '重命名文件夹' : '新建文件夹'}</h3>{dialog.kind === 'delete' ? <p>其中的对话将移回最近对话，不会删除聊天内容。</p> : <input autoFocus aria-label="文件夹名称" required maxLength={80} value={name} onChange={e => setName(e.target.value)}/>}<div className="dialog-actions"><button type="button" className="secondary-button" disabled={saving} onClick={() => setDialog(null)}>取消</button><button className={dialog.kind === 'delete' ? 'danger-button' : 'primary-button'} disabled={saving || dialog.kind !== 'delete' && !name.trim()}>{dialog.kind === 'delete' ? '删除' : '确认'}</button></div></form></div>}</>;
 }

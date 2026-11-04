@@ -61,7 +61,7 @@ test('reopen recovers pending tasks, durable complete branches, secrets never re
   expect(JSON.stringify(s.settings())).not.toContain('test-secret');
   s.db.close(); s = new Store(dir);
   expect(s.stream(stream).messages[1].slots[0].anchors).toHaveLength(1);
-  expect(s.stream(b.streamId).messages[1].status).toBe('interrupted');
+  expect(s.stream(b.streamId).messages).toHaveLength(1);
   expect(s.appendQuestion(b.streamId, '继续提问', uuid()).streamId).toBe(b.streamId);
 });
 
@@ -369,13 +369,16 @@ test('manual stop finalizes partial blocks for context, editing and nested branc
   expect(JSON.stringify(s.context(session.root_stream_id))).toContain('修改后的列表项');
 });
 
-test('empty stops create no blocks; errors and interruptions do not enter context', () => {
+test('empty generation outcomes remove messages; partial failures and interruptions are blocks in context', () => {
   for (const status of ['stopped', 'error', 'interrupted'] as const) {
     const session = s.createSession();
-    const g = s.appendQuestion(session.root_stream_id, '问题', uuid());
-    s.end(g.generationId, status, 'TEST', status === 'stopped' ? '' : '不应纳入的草稿');
-    expect(s.stream(session.root_stream_id).messages[1].slots).toHaveLength(0);
-    expect(JSON.stringify(s.context(session.root_stream_id))).not.toContain('不应纳入');
+    const empty = s.appendQuestion(session.root_stream_id, '问题', uuid());
+    s.end(empty.generationId, status, 'TEST', '');
+    expect(s.stream(session.root_stream_id).messages).toHaveLength(1);
+    const partial = s.appendQuestion(session.root_stream_id, '继续', uuid());
+    s.end(partial.generationId, status, 'TEST', '已输出一段\n\n第二段');
+    expect(s.stream(session.root_stream_id).messages.at(-1)!.slots).toHaveLength(2);
+    expect(JSON.stringify(s.context(session.root_stream_id))).toContain('已输出一段');
   }
 });
 
@@ -419,25 +422,27 @@ test('reedit latest answer atomically restores visible question and original att
   expect(s.all('SELECT * FROM generations')).toHaveLength(0);
 });
 
-test('reedit rejects non-latest, user and busy requests; empty failed answers can restore question', () => {
+test('reedit rejects stale and busy requests; removed empty answers can restore latest question', () => {
   const { stream } = root();
   const messages = s.stream(stream).messages;
-  expect(() => s.reeditQuestion(messages[0].id)).toThrow('最新回答');
+  expect(() => s.reeditQuestion(messages[0].id)).toThrow('最新一轮问答');
   const next = s.appendQuestion(stream, '下一条', uuid());
   expect(() => s.reeditQuestion(next.messageId!)).toThrow('正在生成');
   s.end(next.generationId, 'error', 'TEST', '');
-  expect(() => s.reeditQuestion(messages[1].id)).toThrow('最新回答');
-  const restored = s.reeditQuestion(next.messageId!);
+  expect(() => s.reeditQuestion(messages[1].id)).toThrow('最新一轮问答');
+  const restored = s.reeditQuestion(s.stream(stream).messages.at(-1)!.id);
   expect(restored.text).toBe('下一条');
   expect(s.stream(stream).messages).toHaveLength(2);
 });
 
-test('empty earlier failure can be reedited without removing later conversation', () => {
+test('stale empty-failure recovery cannot remove later conversation', () => {
   const session = s.createSession();
-  const failed = s.appendQuestion(session.root_stream_id, '较早的问题', uuid()); s.end(failed.generationId, 'error', 'TEST', '');
+  const failed = s.appendQuestion(session.root_stream_id, '较早的问题', uuid());
+  const questionId = s.stream(session.root_stream_id).messages[0].id;
+  s.end(failed.generationId, 'error', 'TEST', '');
   const later = s.appendQuestion(session.root_stream_id, '后续问题', uuid()); finish(later, '后续回答');
-  expect(s.reeditQuestion(failed.messageId!).text).toBe('较早的问题');
-  expect(s.stream(session.root_stream_id).messages.map(message => message.content_markdown)).toEqual(['后续问题', '后续回答']);
+  expect(() => s.reeditQuestion(questionId)).toThrow('最新一轮问答');
+  expect(s.stream(session.root_stream_id).messages).toHaveLength(3);
 });
 
 test('rewrite accepts more than 500 blocks and checks the fully assembled model budget', () => {
@@ -481,4 +486,38 @@ test('rewrite of list body retains first marker while splitting later paragraphs
   s.decideProposal(proposal.proposalId, true, node.id);
   const slots = s.stream(stream).messages[1].slots;
   expect(slots.map(slot => slot.meta.marker)).toEqual(['3.', undefined, '4.']);
+});
+
+test('last block deletion or empty edit removes message and resources; empty completion removes answer', () => {
+  const { stream, node } = root('唯一内容');
+  s.changeBlock(node.slot_id, node.id, '');
+  expect(s.stream(stream).messages).toHaveLength(1);
+  expect(s.one('SELECT id FROM content_nodes WHERE id=?', node.id)).toBeUndefined();
+  const next = s.appendQuestion(stream, '再次', uuid()); finish(next, '');
+  expect(s.stream(stream).messages.map(m => m.role)).toEqual(['user', 'user']);
+  const g = s.appendQuestion(stream, '最后', uuid()); finish(g, '最后一段');
+  const block = s.stream(stream).messages.at(-1)!.slots[0]; s.changeBlock(block.id, block.node.id);
+  expect(s.stream(stream).messages.at(-1)!.role).toBe('user');
+});
+
+test('folders enforce depth and cycles, sort sessions independently, survive restart, and delete only classification', () => {
+  const a = s.saveFolder(null, 'A'), b = s.saveFolder(null, 'B');
+  const child = s.saveFolder(null, '子', a.id);
+  expect(() => s.saveFolder(null, '三级', child.id)).toThrow('两级');
+  expect(() => s.moveFolder(a.id, child.id)).toThrow('两级');
+  expect(() => s.moveFolder(a.id, b.id)).toThrow('两级');
+  expect(() => s.moveFolder(b.id, b.id)).toThrow('两级');
+  s.moveFolder(b.id, null, a.id); expect(s.folders().filter(f => !f.parent_id).map(f => f.id)).toEqual([b.id,a.id]);
+  const one = s.createSession('one'), two = s.createSession('two');
+  const dates = s.sessions().map(v => [v.id,v.updated_at]);
+  s.moveSession(one.id, child.id); s.moveSession(two.id, child.id, one.id);
+  expect(s.all('SELECT session_id FROM session_folders ORDER BY position').map(v => v.session_id)).toEqual([two.id,one.id]);
+  expect(s.sessions().map(v => [v.id,v.updated_at])).toEqual(dates);
+  s.moveSession(two.id, b.id); s.moveSession(two.id, null);
+  s.saveFolder(a.id, '改名', null);
+  s.db.close(); s = new Store(dir);
+  expect(s.need('folders',a.id).name).toBe('改名'); expect(s.sessions().find(v => v.id === one.id)!.folder_id).toBe(child.id);
+  s.deleteFolder(a.id);
+  expect(s.folders()).toHaveLength(1); expect(s.sessions()).toHaveLength(2); expect(s.sessions().every(v => !v.folder_id)).toBe(true);
+  s.clearData(); expect(s.folders()).toHaveLength(0);
 });

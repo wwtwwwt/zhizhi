@@ -90,7 +90,7 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
   app.post('/api/slots/:id/after', (req, res) => { const d = z.object({ markdown: question, expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.addBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
   app.post('/api/nodes/:id/rewrites', (req, res) => { const data = z.object({ requestId, modelId: z.string().max(100).optional() }).parse(req.body); res.json(store.rewrite(idParam(req), data.requestId, data.modelId)); });
   app.patch('/api/slots/:id/active-version', (req, res) => { const d = z.object({ nodeId: z.string().uuid(), expectedActiveNodeId: z.string().uuid() }).parse(req.body); store.switchVersion(idParam(req), d.nodeId, d.expectedActiveNodeId); res.json({ ok: true }); });
-  app.patch('/api/slots/:id/content', (req, res) => { const d = z.object({ markdown: z.string().trim().min(1).max(30_000), expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.changeBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
+  app.patch('/api/slots/:id/content', (req, res) => { const d = z.object({ markdown: z.string().trim().max(30_000), expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.changeBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
   app.post('/api/messages/:id/reedit', (req,res) => res.json(store.reeditQuestion(idParam(req))));
   app.delete('/api/messages/:id', (req,res)=>{const result=store.deleteMessage(idParam(req));for(const g of active.keys())if(!store.one('SELECT id FROM generations WHERE id=?',g))active.get(g)?.abort('deleted');res.json(result);});
   app.delete('/api/slots/:id', (req, res) => { const d = z.object({ expectedActiveNodeId: z.string().uuid(), scope:z.enum(['all','current','history']) }).parse(req.body); const result = store.changeBlock(idParam(req), d.expectedActiveNodeId, undefined, d.scope); for (const g of active.keys()) { if (!store.one('SELECT id FROM generations WHERE id=?',g)) active.get(g)?.abort('deleted'); } res.json(result); });
@@ -102,9 +102,15 @@ export function createApp(store: Store, options: { paperEndpoint?: string; stati
     for(const controller of active.values()) controller.abort('deleted');
     res.json(store.clearData());
   });
+  app.get('/api/folders', (_req,res) => res.json(store.folders()));
+  app.post('/api/folders', (req,res) => { const d=z.object({ name:z.string().trim().min(1).max(80),parentId:z.string().nullable().optional() }).parse(req.body); res.json(store.saveFolder(null,d.name,d.parentId)); });
+  app.patch('/api/folders/:id', (req,res) => { const d=z.object({ name:z.string().trim().min(1).max(80) }).parse(req.body); const f=store.need('folders',idParam(req)); res.json(store.saveFolder(f.id,d.name,f.parent_id)); });
+  app.post('/api/folders/:id/move', (req,res) => { const d=z.object({ parentId:z.string().nullable(),beforeId:z.string().optional() }).parse(req.body); res.json(store.moveFolder(idParam(req),d.parentId,d.beforeId)); });
+  app.delete('/api/folders/:id', (req,res) => res.json(store.deleteFolder(idParam(req))));
+  app.post('/api/sessions/:id/move', (req,res) => { const d=z.object({ folderId:z.string().nullable(),beforeId:z.string().optional() }).parse(req.body); res.json(store.moveSession(idParam(req),d.folderId,d.beforeId)); });
   app.get('/api/settings', (_req, res) => res.json(store.settings()));
   app.put('/api/settings', (req, res) => {
-    const data = z.object({ theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), autoScroll:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
+    const data = z.object({ theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), autoScroll:z.boolean().optional(), blurBackdrop:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
   });
   app.post('/api/fake/v1/chat/completions', async (req, res) => {
     const d = z.object({ messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.unknown())]) })), stream: z.literal(true), __fake: z.object({ kind: z.enum(['reply','branch','rewrite']), depth: z.number().int().min(0).max(500), delay: z.number().min(0).max(250), failure: z.enum(['error','disconnect']).optional() }) }).parse(req.body);

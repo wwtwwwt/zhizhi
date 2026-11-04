@@ -4,6 +4,7 @@ import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, 
 import { createPortal } from 'react-dom';
 import { useCenteredResize } from './useCenteredResize';
 import { layoutSideItems, type Corner } from '../shared/workspace-layout';
+import { SessionList } from './SessionList';
 import { ReeditQuestion } from './ReeditQuestion';
 import { ReasoningPanel } from './ReasoningPanel';
 import { SendComposer, composerModelId } from './SendComposer';
@@ -86,22 +87,21 @@ export function App() {
       await loadStream(selection.streamId); await refreshSessions(); setSelection(null); window.getSelection()?.removeAllRanges(); return true;
     } catch (e) { notify((e as Error).message); return false; } finally { setCreating(false); }
   };
-  return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`}>
+  return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar" inert={stack.length > 0 || !!manage}>
-      <button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span className="brand-icon"><img src={brandMark} width={22} height={22} alt=""/></span><span>枝知<small>ZHIZHI</small></span></button>
-      <button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span><span className="key-hint" aria-hidden="true">↗</span></button>
-      <div className="sidebar-label">你的对话 <span>{state.sessions.length || ''}</span></div>
-      <nav className="sessions" aria-label="对话列表">{state.sessions.map(s => <div className={`session-row ${s.id === sessionId && page === 'chat' ? 'active' : ''}`} key={s.id}>
-        <button className="session-link" onClick={() => chooseSession(s.id)}><MessageSquare size={15}/><span>{s.title}</span></button>
-        <div className="session-actions"><button className="icon-button" title="重命名" onClick={() => { setManage({ session: s, kind: 'rename' }); setNewTitle(s.title); }}><Pencil size={13}/></button><button className="icon-button" title="删除对话" onClick={async () => { if (state.settings?.confirmDeletion !== false) { setManage({ session: s, kind: 'delete' }); return; } try { await api(`/sessions/${s.id}`, 'DELETE'); if (sessionId === s.id) chooseSession(null); await refreshSessions(); } catch(e) { notify((e as Error).message); } }}><Trash2 size={13}/></button></div>
-      </div>)}{!state.sessions.length && <p className="sidebar-empty">暂无对话</p>}</nav>
+      <button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span className="brand-icon"><img src={brandMark} width={22} height={22} alt=""/></span><span>枝知<small>ZHI ZHI</small></span></button>
+      <button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
+      <SessionList selectedId={page === 'chat' ? sessionId : null} onChoose={chooseSession} onManage={(session, kind) => {
+        if (kind === 'delete' && state.settings?.confirmDeletion === false) { void api(`/sessions/${session.id}`, 'DELETE').then(async () => { if (sessionId === session.id) chooseSession(null); await refreshSessions(); }).catch(e => notify(e.message)); }
+        else { setManage({ session, kind }); setNewTitle(session.title); }
+      }}/>
       <div className="sidebar-footer"><button className={`settings-link ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><SettingsIcon size={17}/>设置</button></div>
     </aside>
     <div className="workspace" inert={stack.length > 0 || !!manage}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button sidebar-toggle" aria-label="切换侧栏" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><span className="topbar-divider"/><span>{page === 'settings' ? '设置' : session?.title || '新的对话'}</span></div></header>
       {page === 'settings' ? <SettingsPage onBack={() => navigate('chat')}/> : <Conversation key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
     </div>
-    {stack.length > 0 && <div className={`branch-backdrop ${closingFrom === 0 ? 'closing' : ''}`} onClick={() => closeTo(stack.length - 1)}/>}
+    {stack.length > 0 && <div className={`branch-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''} ${closingFrom === 0 ? 'closing' : ''}`} onClick={() => closeTo(stack.length - 1)}/>}
     {stack.length > 0 && <div className="branch-outside-dismiss" style={{ zIndex: 109 + (stack.length - 1) * 2 }} onClick={() => closeTo(stack.length - 1)}/>}
     {stack.map((layer, index) => <BranchLayer key={layer.streamId} layer={layer} index={index} total={stack.length} closing={closingFrom !== null && index >= closingFrom} onClose={() => closeTo(index)} onJump={closeTo} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>)}
     {selection && <div className={`selection-popover ${askOpen ? 'expanded' : ''}`} style={{ left: Math.min(Math.max(16, selection.x), innerWidth - (askOpen ? 382 : 220)), top: Math.min(Math.max(16, selection.y), innerHeight - (askOpen ? 260 : 60)) }}>
@@ -112,7 +112,7 @@ export function App() {
       </div>}
     </div>}
     {manage && <div className="manage-backdrop"><section className="manage-dialog" role="dialog" aria-modal="true" aria-label={manage.kind === 'rename' ? '重命名对话' : '删除对话'}><h3>{manage.kind === 'rename' ? '给这段对话起个名字' : '删除这段对话？'}</h3>{manage.kind === 'rename' ? <input autoFocus value={newTitle} maxLength={120} onChange={e => setNewTitle(e.target.value)}/> : <p>主对话和所有分支都会被删除，此操作无法撤销。</p>}<div className="dialog-actions"><button className="secondary-button" onClick={() => setManage(null)}>取消</button><button className={manage.kind === 'delete' ? 'danger-button' : 'primary-button'} disabled={manage.kind === 'rename' && !newTitle.trim()} onClick={async () => { try { await api(`/sessions/${manage.session.id}`, manage.kind === 'rename' ? 'PATCH' : 'DELETE', manage.kind === 'rename' ? { title: newTitle.trim() } : undefined); if (manage.kind === 'delete' && sessionId === manage.session.id) chooseSession(null); await refreshSessions(); setManage(null); } catch (e) { notify((e as Error).message); } }}>{manage.kind === 'rename' ? '保存' : '删除'}</button></div></section></div>}
-    {state.toast && <div className="toast" role="status">{state.toast}<button className="icon-button" aria-label="关闭提示" onClick={() => notify('')}><X size={14}/></button></div>}
+    {state.toast && <div className="toast" role="status">{state.toast}{state.toastAction && <button className="toast-action" onClick={() => void state.toastAction?.run().catch(e => notify(e.message))}>{state.toastAction.label}</button>}<button className="icon-button" aria-label="关闭提示" onClick={() => notify('')}><X size={14}/></button></div>}
   </div>;
 }
 
@@ -207,7 +207,7 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
       <div className="message-content">{message.attachments && message.attachments.length > 0 && <div className="message-attachments">{message.attachments.map(a => <a key={a.id} href={`/api/attachments/${a.id}`} target="_blank" rel="noreferrer" title={a.name}>{a.kind === 'image' ? <img src={`/api/attachments/${a.id}`} alt={a.name}/> : <span>TXT</span>}<small>{a.name}</small></a>)}</div>}{(job?.reasoning || message.reasoning_text) && <ReasoningPanel text={job?.reasoning || message.reasoning_text || ''} simulated={message.model_label === '模拟模式'} startedAt={job?.reasoningStartedAt} endedAt={job?.reasoningEndedAt}/>}{message.slots.map(slot => <BlockView key={slot.id} messageId={message.id} slot={slot} role={message.role} toolsHost={toolsHost} {...props}/>)}
       {pending && <div className="streaming-container" aria-live="off">{job?.text || message.content_markdown ? <StreamingMarkdown source={job?.text || message.content_markdown}/> : <span className="thinking">正在整理思路<span>···</span></span>}</div>}
       {!pending && message.status !== 'complete' && <div className="failed-message">{message.status !== 'stopped' && !message.slots.length && message.content_markdown && <div className="stopped-draft markdown"><Markdown source={message.content_markdown}/></div>}<span>{message.status === 'stopped' ? '已停止生成' : '回答未完成'}</span></div>}
-      </div><aside className="message-tools" aria-label="右侧功能区" ref={setToolsHost}>{!pending && ['error','interrupted'].includes(message.status) && !message.content_markdown.trim() && !message.slots.length && <ReeditQuestion messageId={message.id} streamId={message.stream_id} label="删除此消息并重新编辑"/>}</aside></div>
+      </div><aside className="message-tools" aria-label="右侧功能区" ref={setToolsHost}></aside></div>
     </div>
   </article>;
 }
@@ -263,7 +263,7 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
     setSaving(true);
     try {
       const result = await api<{streamIds?:string[]}>(`/slots/${slot.id}${remove ? '' : '/content'}`, remove ? 'DELETE' : 'PATCH', { expectedActiveNodeId: node.id, ...(remove ? {scope} : { markdown: editText }) });
-      if (remove) forgetStreams(result.streamIds || []);
+      forgetStreams(result.streamIds || []);
       await loadStream(streamId!); setEditing(false); setMenu(false); setDeleting(false);
     } catch (e) { notify((e as Error).message); } finally { setSaving(false); }
   };
@@ -369,7 +369,7 @@ function BlockView({ messageId, slot, role, streamId, depth, onBranch, onSelect,
     {!editing && <div className="block-handles">{slot.versions.length > 1 && <button className="block-history" aria-label="历史版本" title="历史版本" onClick={() => { setContextMenu(null); setMenu(!menu); setDeleting(false); setDeletingBranch(false); }}><History size={16}/></button>}<button ref={handleRef} className="block-handle" aria-label="块操作" aria-haspopup="menu" aria-expanded={menu} title="块操作" onClick={() => { setContextMenu(null); setMenu(!menu); setDeleting(false); setDeletingBranch(false); }}><GripVertical size={16}/></button></div>}
     {menu && (contextMenu ? createPortal(blockMenu, document.body) : blockMenu)}
     {slot.meta.marker && <span className="list-marker" aria-hidden="true">{slot.meta.marker}</span>}
-    {editing ? <form className="block-editor" onSubmit={e => { e.preventDefault(); void changeContent(); }} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); handleRef.current?.focus(); } }}><textarea aria-label="编辑块内容" autoFocus value={editText} onChange={e => setEditText(e.target.value)} rows={Math.min(14, Math.max(3, editText.split('\n').length + 1))}/><div><span>Markdown</span><button type="button" className="secondary-button" disabled={saving} onClick={() => setEditing(false)}>取消</button><button className="primary-button" disabled={saving || !editText.trim()}>保存新版本</button></div></form> : <div className="selectable markdown" data-node={node.id} data-markdown={node.markdown} data-prefix={`${slot.meta.quote ? '> ' : ''}${slot.meta.marker ? `${slot.meta.marker === '•' ? '-' : slot.meta.marker} ` : ''}`} onKeyUp={e => { if (e.key === 'Shift' || e.key.startsWith('Arrow')) selected(); }}><Markdown source={node.markdown} anchors={slot.anchors} activeBranchId={activeBranch} onActiveBranch={setActiveBranch} onBranch={a => onBranch(a, depth)}/></div>}
+    {editing ? <form className="block-editor" onSubmit={e => { e.preventDefault(); void changeContent(); }} onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); handleRef.current?.focus(); } }}><textarea aria-label="编辑块内容" autoFocus value={editText} onChange={e => setEditText(e.target.value)} rows={Math.min(14, Math.max(3, editText.split('\n').length + 1))}/><div><span>Markdown</span><button type="button" className="secondary-button" disabled={saving} onClick={() => setEditing(false)}>取消</button><button className="primary-button" disabled={saving}>保存新版本</button></div></form> : <div className="selectable markdown" data-node={node.id} data-markdown={node.markdown} data-prefix={`${slot.meta.quote ? '> ' : ''}${slot.meta.marker ? `${slot.meta.marker === '•' ? '-' : slot.meta.marker} ` : ''}`} onKeyUp={e => { if (e.key === 'Shift' || e.key.startsWith('Arrow')) selected(); }}><Markdown source={node.markdown} anchors={slot.anchors} activeBranchId={activeBranch} onActiveBranch={setActiveBranch} onBranch={a => onBranch(a, depth)}/></div>}
     {toolsHost && slot.anchors.length > 0 && createPortal(<section className="block-side" data-slot-tools={slot.id} aria-label="内容块功能">
       {slot.anchors.length > 0 && <div className="branch-previews" data-side-content>{slot.anchors.map(anchor => {
         const loaded = state.streams[anchor.stream_id];

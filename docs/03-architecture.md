@@ -22,6 +22,7 @@
 | 位置 | 职责 |
 |---|---|
 | src/App.tsx | 侧栏、Conversation／MessageView／BlockView、选区、分支栈和重构预览 |
+| src/SessionList.tsx | 两级文件夹、会话拖放归属／排序及分类操作 |
 | src/client.ts | 可订阅状态、HTTP、SSE任务、流缓存与删除清理 |
 | src/SendComposer.tsx | 主流／分支／选区共用输入及页面内草稿 |
 | src/Markdown.tsx、selection.ts、StreamingMarkdown.tsx | 渲染、DOM选区桥接、Markdown复制和流式更新 |
@@ -40,7 +41,7 @@
 
 SQLite 是聊天、模型配置与偏好的权威数据源。前端按流ID缓存已加载消息，打开流时按需获取，不递归预载整个分支树。分支摘要由服务端查询，流式任务独立于弹窗挂载，关闭分支不停止生成。
 
-前端保留当前弹窗栈、选区、菜单、页面内草稿及生成草稿。localStorage 只保存最近会话、上次模型和共享窗口尺寸。刷新不恢复完整弹窗栈或输入草稿；网络断开结束模型流，服务重启恢复残留任务为 interrupted。
+前端保留当前弹窗栈、选区、菜单、页面内草稿及生成草稿。localStorage 只保存最近会话、上次模型、共享窗口尺寸及文件夹展开状态。刷新不恢复完整弹窗栈或输入草稿；网络断开结束模型流，服务重启恢复残留任务为 interrupted。
 
 服务端与前端共用 Markdown 解析规则。规范选区为 UTF-16 半开范围，DOM文本片段映射到节点 selection_text；公式按原子长度处理。高亮在 AST 渲染阶段生成，不直接修改 React 管理的正文结构。原始 HTML 由 htmlparser2 转换为白名单 AST（shared/html.ts），仅输出允许的标签与结构属性，链接与图片仍按协议规则处理；不插入原始 HTML。
 

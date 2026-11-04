@@ -17,7 +17,7 @@ export type Row = Record<string, any>;
 export class AppError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
 const id = () => randomUUID();
 const now = () => new Date().toISOString();
-export const defaults: Settings = { autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
+export const defaults: Settings = { blurBackdrop:false, autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
 export class Store {
   db: DatabaseSync;
   models: ModelRegistry;
@@ -29,11 +29,20 @@ export class Store {
     if (!this.one("SELECT name FROM sqlite_master WHERE name='sessions'")) {
       this.tx(() => this.db.exec(readFileSync(fileURLToPath(new URL('./schema.sql', import.meta.url)), 'utf8')));
     }
+    this.db.exec(`CREATE TABLE IF NOT EXISTS folders(id TEXT PRIMARY KEY,name TEXT NOT NULL,parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,position REAL NOT NULL);
+      CREATE TABLE IF NOT EXISTS session_folders(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,position REAL NOT NULL);`);
     this.secrets = new Secrets(dir, secretCodec);
     this.models = new ModelRegistry(this);
     this.tx(() => {
       this.run("UPDATE messages SET status='interrupted' WHERE status IN ('queued','streaming')");
       this.run("UPDATE generations SET status='interrupted',error_code='INTERRUPTED',finished_at=? WHERE status IN ('queued','streaming')", now());
+      for (const message of this.all("SELECT * FROM messages WHERE status='interrupted'")) {
+        if (!this.visibleSlots(message.id).length) {
+          const draft = this.one('SELECT draft_markdown FROM generations WHERE id=?', message.generation_id)?.draft_markdown || message.content_markdown;
+          if (splitMarkdown(draft).length) { this.finalizeMessage(message.id, draft); this.run("UPDATE messages SET status='interrupted' WHERE id=?", message.id); }
+          else this.removeEmptyMessage(message.id);
+        }
+      }
     });
   }
   one(sql: string, ...args: SQLInputValue[]): Row | undefined { return this.db.prepare(sql).get(...args) as Row | undefined; }
@@ -58,14 +67,57 @@ export class Store {
     this.db.exec('PRAGMA secure_delete=ON');
     try {
       this.tx(()=>{
-        this.run('DELETE FROM sessions'); this.run('DELETE FROM models'); this.run('DELETE FROM settings');
+        this.run('DELETE FROM sessions'); this.run('DELETE FROM folders'); this.run('DELETE FROM models'); this.run('DELETE FROM settings');
         this.secrets.write({});
       });
     } catch(e) { if(oldSecret) writeFileSync(path,oldSecret,{mode:0o600}); throw e; }
     this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);');
     return {ok:true};
   }
-  sessions(): Session[] { return this.all("SELECT s.*,t.id AS root_stream_id FROM sessions s JOIN streams t ON t.session_id=s.id AND t.kind='root' ORDER BY s.updated_at DESC") as Session[]; }
+  sessions(): Session[] { return this.all("SELECT s.*,f.folder_id,f.position,t.id AS root_stream_id FROM sessions s LEFT JOIN session_folders f ON f.session_id=s.id JOIN streams t ON t.session_id=s.id AND t.kind='root' ORDER BY s.updated_at DESC") as Session[]; }
+  folders() { return this.all('SELECT * FROM folders ORDER BY position,id'); }
+  saveFolder(folderId: string | null, name: string, parentId: string | null = null) {
+    return this.tx(() => {
+      if (parentId) { const parent = this.need('folders', parentId); if (parent.parent_id) throw new AppError(400, 'FOLDER_DEPTH', '最多支持两级文件夹'); }
+      if (this.one('SELECT id FROM folders WHERE name=? AND parent_id IS ? AND id!=?', name, parentId, folderId || '')) throw new AppError(409, 'FOLDER_NAME', '同级文件夹名称重复');
+      const fid = folderId || id();
+      if (folderId) { this.need('folders', fid); this.run('UPDATE folders SET name=? WHERE id=?', name, fid); }
+      else this.run('INSERT INTO folders VALUES(?,?,?,?)', fid, name, parentId, Number(this.one('SELECT COALESCE(MAX(position),-1)+1 AS n FROM folders WHERE parent_id IS ?', parentId)!.n));
+      return this.need('folders', fid);
+    });
+  }
+  moveFolder(folderId: string, parentId: string | null, beforeId?: string) {
+    return this.tx(() => {
+      this.need('folders', folderId);
+      if (parentId) {
+        const parent = this.need('folders', parentId);
+        if (parentId === folderId || parent.parent_id || this.one('SELECT id FROM folders WHERE parent_id=?', folderId)) throw new AppError(400, 'FOLDER_DEPTH', '最多支持两级文件夹，不能移动到自身或子文件夹');
+      }
+      const folder = this.need('folders', folderId);
+      if (this.one('SELECT id FROM folders WHERE name=? AND parent_id IS ? AND id!=?', folder.name, parentId, folderId)) throw new AppError(409, 'FOLDER_NAME', '同级文件夹名称重复');
+      const siblings = this.all('SELECT id FROM folders WHERE parent_id IS ? AND id!=? ORDER BY position,id', parentId, folderId).map(f => f.id as string);
+      const index = beforeId ? siblings.indexOf(beforeId) : siblings.length;
+      if (index < 0) throw new AppError(400, 'FOLDER_ORDER', '目标文件夹已变化');
+      siblings.splice(index, 0, folderId);
+      this.run('UPDATE folders SET parent_id=? WHERE id=?', parentId, folderId);
+      siblings.forEach((fid, i) => this.run('UPDATE folders SET position=? WHERE id=?', i, fid));
+      return { ok: true };
+    });
+  }
+  moveSession(sessionId: string, folderId: string | null, beforeId?: string) {
+    return this.tx(() => {
+      this.need('sessions', sessionId);
+      if (!folderId) { this.run('DELETE FROM session_folders WHERE session_id=?', sessionId); return { ok: true }; }
+      this.need('folders', folderId);
+      const siblings = this.all('SELECT session_id FROM session_folders WHERE folder_id=? AND session_id!=? ORDER BY position,session_id', folderId, sessionId).map(s => s.session_id as string);
+      const index = beforeId ? siblings.indexOf(beforeId) : siblings.length;
+      if (index < 0) throw new AppError(400, 'SESSION_ORDER', '目标对话已变化');
+      siblings.splice(index, 0, sessionId);
+      siblings.forEach((sid, i) => this.run('INSERT INTO session_folders VALUES(?,?,?) ON CONFLICT(session_id) DO UPDATE SET folder_id=excluded.folder_id,position=excluded.position', sid, folderId, i));
+      return { ok: true };
+    });
+  }
+  deleteFolder(folderId: string) { this.need('folders', folderId); this.run('DELETE FROM folders WHERE id=?', folderId); return { ok: true }; }
   createSession(title = '新的对话'): Session {
     return this.tx(() => { const sid = id(), root = id(), time = now(); this.run('INSERT INTO sessions VALUES(?,?,?,?)', sid, title, time, time); this.run("INSERT INTO streams VALUES(?,?,'root','[]')", root, sid); return { id: sid, title, root_stream_id: root, updated_at: time }; });
   }
@@ -76,7 +128,7 @@ export class Store {
   assertVisible(slot: Row) { if (!this.visibleSlots(slot.message_id).some(s => s.id === slot.id)) throw new AppError(409, 'STALE_VERSION', '内容已变化，请从当前显示的版本操作'); }
   branchPreview(streamId: string): NonNullable<Anchor['preview']> {
     const first = (role: string) => this.one("SELECT * FROM messages WHERE stream_id=? AND role=? AND status!='deleted' ORDER BY ordinal LIMIT 1", streamId, role);
-    const snippet = (message?: Row) => !message ? '' : ['complete','stopped'].includes(message.status)
+    const snippet = (message?: Row) => !message ? '' : ['complete','stopped','error','interrupted'].includes(message.status)
       ? this.visibleSlots(message.id).map(s => this.need('content_nodes', s.active_node_id).selection_text).join(' ').slice(0, 180)
       : nodeTree(message.content_markdown || '').text.slice(0, 180);
     const answer = first('assistant');
@@ -105,7 +157,7 @@ export class Store {
   refs(streamId: string, throughNode?: string): ContextRef[] {
     const stream = this.need('streams', streamId);
     const refs: ContextRef[] = JSON.parse(stream.context_snapshot_json);
-    for (const message of this.all("SELECT * FROM messages WHERE stream_id=? AND status IN ('complete','stopped') ORDER BY ordinal", streamId)) {
+    for (const message of this.all("SELECT * FROM messages WHERE stream_id=? AND status IN ('complete','stopped','error','interrupted') ORDER BY ordinal", streamId)) {
       const slots = this.visibleSlots(message.id);
       const ids: string[] = slots.map(s => s.active_node_id);
       if (ids.length) refs.push({ role: message.role, nodeIds: ids, attachmentMessageId: attachmentInfo(this, message.id).length ? message.id : undefined });
@@ -139,7 +191,12 @@ export class Store {
     }) }));
   }
   replay(requestId: string, signature: string): Row | undefined { const g = this.one('SELECT * FROM generations WHERE request_id=?', requestId); if (g && g.request_signature !== signature) throw new AppError(409, 'REQUEST_CONFLICT', '请求标识已用于其他操作'); return g; }
-  result(g: Row): GenerationResult { const branch = this.one('SELECT * FROM branches WHERE stream_id=?', g.stream_id) as Anchor | undefined; return { generationId: g.id, streamId: g.stream_id, messageId: g.target_message_id || undefined, branch }; }
+  result(g: Row): GenerationResult {
+    const branch = this.one('SELECT * FROM branches WHERE stream_id=?', g.stream_id) as Anchor | undefined;
+    const answer = g.target_message_id ? this.one('SELECT ordinal FROM messages WHERE id=?', g.target_message_id) : undefined;
+    const previous = answer ? this.one("SELECT id,role FROM messages WHERE stream_id=? AND ordinal<? AND status!='deleted' ORDER BY ordinal DESC LIMIT 1", g.stream_id, answer.ordinal) : undefined;
+    return { generationId: g.id, streamId: g.stream_id, messageId: g.target_message_id || undefined, questionMessageId: previous?.role === 'user' ? previous.id : undefined, branch };
+  }
   generation(streamId: string, messageId: string | null, sourceNodeId: string | null, kind: string, messages: ChatMessage[], requestId: string, signature: string, selectedModel?: ModelConfig) {
     const model = selectedModel || this.models.get();
     const settings = { modelConfig: model };
@@ -177,7 +234,7 @@ export class Store {
     else { const old = this.one('SELECT * FROM branches WHERE request_id=?', requestId); if (old) { if (old.source_node_id !== sourceNodeId || old.start_offset !== start || old.end_offset !== end || old.selected_text !== selectedText || this.one('SELECT content_markdown FROM messages WHERE stream_id=? AND ordinal=0', old.stream_id)?.content_markdown !== question) throw new AppError(409, 'REQUEST_CONFLICT', '请求标识已用于其他操作'); return { streamId: old.stream_id, branch: old as Anchor }; } }
     return this.tx(() => {
       const node = this.need('content_nodes', sourceNodeId), slot = this.need('block_slots', node.slot_id), message = this.need('messages', slot.message_id), parent = this.need('streams', message.stream_id);
-      if (slot.deleted_at || slot.active_node_id !== sourceNodeId || node.status !== 'available' || node.block_type === 'thematicBreak' || !['complete','stopped'].includes(message.status)) throw new AppError(409, 'STALE_VERSION', '只能从当前已完成的正文创建分支');
+      if (slot.deleted_at || slot.active_node_id !== sourceNodeId || node.status !== 'available' || node.block_type === 'thematicBreak' || !['complete','stopped','error','interrupted'].includes(message.status)) throw new AppError(409, 'STALE_VERSION', '只能从当前已完成的正文创建分支');
       this.assertVisible(slot);
       if (!validBoundary(node.selection_text, start, end) || !validMathSelection(node.markdown, start, end) || !selectedText.trim() || node.selection_text.slice(start, end) !== selectedText) throw new AppError(422, 'INVALID_SELECTION', '选中文字发生变化或公式未完整选择，请重新选择');
       if (this.one('SELECT id FROM branches WHERE source_node_id=? AND start_offset<? AND end_offset>?', sourceNodeId, end, start)) throw new AppError(409, 'ANCHOR_OVERLAP', '选区包含已有分支，请重新选择');
@@ -215,18 +272,19 @@ export class Store {
       const answer = this.need('messages', messageId); this.assertIdle(answer.stream_id);
       const latest = this.one("SELECT id FROM messages WHERE stream_id=? AND status!='deleted' ORDER BY ordinal DESC LIMIT 1", answer.stream_id);
       const question = this.one("SELECT * FROM messages WHERE stream_id=? AND ordinal<? AND status!='deleted' ORDER BY ordinal DESC LIMIT 1", answer.stream_id, answer.ordinal);
-      const emptyFailure = ['error','interrupted'].includes(answer.status) && !answer.content_markdown.trim() && !this.visibleSlots(answer.id).length;
-      if (answer.role !== 'assistant' || (latest?.id !== messageId && !emptyFailure) || question?.role !== 'user') throw new AppError(409, 'NOT_LATEST_ANSWER', '只能重新编辑最新回答或空失败回答的上一条用户消息');
-      let text = this.visibleSlots(question.id).map(slot => {
+      const standalone = answer.role === 'user' && latest?.id === messageId;
+      if (!standalone && (answer.role !== 'assistant' || latest?.id !== messageId || question?.role !== 'user')) throw new AppError(409, 'NOT_LATEST_ANSWER', '只能重新编辑最新一轮问答');
+      const original = standalone ? answer : question!;
+      let text = this.visibleSlots(original.id).map(slot => {
         const meta = JSON.parse(this.one('SELECT meta_json FROM node_layout WHERE node_id=?', slot.active_node_id)?.meta_json || slot.render_meta_json);
         const prefix = `${meta.quote ? '> ' : ''}${meta.marker ? `${meta.marker === '•' ? '-' : meta.marker} ` : ''}`;
         return prefix + this.need('content_nodes', slot.active_node_id).markdown;
       }).join('\n\n');
       // An imported document can also be the preceding user message. Keep its
       // display images usable after deleting their original resource records.
-      for (const resource of this.all('SELECT * FROM document_resources WHERE message_id=?', question.id)) text = text.replaceAll(`/api/document-resources/${resource.id}`, `data:${resource.mime};base64,${Buffer.from(resource.data).toString('base64')}`);
-      const attachments = this.all('SELECT * FROM attachments WHERE message_id=? ORDER BY rowid', question.id).map(file => ({ name: file.name as string, kind: file.kind as 'image' | 'text', mime: file.mime as string, data: Buffer.from(file.data).toString(file.kind === 'image' ? 'base64' : 'utf8') }));
-      const first = this.deleteMessageInside(answer.id), second = this.deleteMessageInside(question.id);
+      for (const resource of this.all('SELECT * FROM document_resources WHERE message_id=?', original.id)) text = text.replaceAll(`/api/document-resources/${resource.id}`, `data:${resource.mime};base64,${Buffer.from(resource.data).toString('base64')}`);
+      const attachments = this.all('SELECT * FROM attachments WHERE message_id=? ORDER BY rowid', original.id).map(file => ({ name: file.name as string, kind: file.kind as 'image' | 'text', mime: file.mime as string, data: Buffer.from(file.data).toString(file.kind === 'image' ? 'base64' : 'utf8') }));
+      const first = standalone ? { streamIds: [] as string[] } : this.deleteMessageInside(answer.id), second = this.deleteMessageInside(original.id);
       return { streamIds: [...new Set([...first.streamIds, ...second.streamIds])], parentStreamId: answer.stream_id as string, text, attachments };
     });
   }
@@ -241,6 +299,13 @@ export class Store {
       this.run('DELETE FROM generations WHERE target_message_id=?',messageId);
       this.pruneDeletedResources();this.touch(message.stream_id);
       return {streamIds:[...new Set(streamIds)],parentStreamId:message.stream_id};
+  }
+  private removeEmptyMessage(messageId: string) {
+    const message = this.one('SELECT * FROM messages WHERE id=?', messageId);
+    if (message && !['queued','streaming','deleted'].includes(message.status) && !this.visibleSlots(messageId).length) {
+      this.run("UPDATE messages SET status='deleted',content_markdown='',reasoning_text='' WHERE id=?", messageId);
+      this.pruneDeletedResources();
+    }
   }
   pruneDeletedResources() {
     // Frozen snapshots in surviving branches still need their ancestor nodes.
@@ -281,7 +346,7 @@ export class Store {
           this.assertIdle(branch.stream_id);
           parts.push(renderPrompt('rewriteSource', { nodeId: source, text: branch.selected_text }));
           parts.push(...this.resolve(this.refs(branch.stream_id).slice(JSON.parse(child.context_snapshot_json).length)).map(m => renderPrompt('rewriteTurn', { role: m.role, content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) })));
-          const ids = this.all("SELECT id FROM messages WHERE stream_id=? AND status IN ('complete','stopped') ORDER BY ordinal", branch.stream_id).flatMap(m => this.visibleSlots(m.id).map(s => s.active_node_id as string));
+          const ids = this.all("SELECT id FROM messages WHERE stream_id=? AND status IN ('complete','stopped','error','interrupted') ORDER BY ordinal", branch.stream_id).flatMap(m => this.visibleSlots(m.id).map(s => s.active_node_id as string));
           stack.push(...ids.reverse());
         }
       }
@@ -292,6 +357,11 @@ export class Store {
   finish(gid: string, markdown: string): Record<string, string> {
     return this.tx(() => {
       const g = this.need('generations', gid); if (g.status !== 'streaming') throw new AppError(409, 'GENERATION_ENDED', '生成已结束');
+      if (!splitMarkdown(markdown).length && g.target_message_id) {
+        this.run("UPDATE generations SET status='complete',finished_at=? WHERE id=?", now(), gid);
+        this.run("UPDATE messages SET status='complete' WHERE id=?", g.target_message_id);
+        this.removeEmptyMessage(g.target_message_id); this.touch(g.stream_id); return { generationId: gid };
+      }
       if (!markdown.trim()) throw new AppError(502, 'EMPTY_OUTPUT', '模型未返回正文');
       let result: Record<string, string> = { generationId: gid };
       if (g.kind === 'rewrite') {
@@ -314,11 +384,14 @@ export class Store {
     this.tx(() => {
       const g = this.need('generations', gid);
       if (!['streaming','queued'].includes(g.status)) return;
-      if (g.target_message_id && status === 'stopped' && splitMarkdown(draft).length) {
+      if (g.target_message_id && splitMarkdown(draft).length) {
         this.finalizeMessage(g.target_message_id, draft);
       }
       this.run('UPDATE generations SET status=?,error_code=?,draft_markdown=?,finished_at=? WHERE id=?', status, code, draft, now(), gid);
-      if (g.target_message_id) this.run('UPDATE messages SET status=?,content_markdown=?,reasoning_text=? WHERE id=?', status, draft, g.reasoning_text || '', g.target_message_id);
+      if (g.target_message_id) {
+        this.run('UPDATE messages SET status=?,content_markdown=?,reasoning_text=? WHERE id=?', status, draft, g.reasoning_text || '', g.target_message_id);
+        this.removeEmptyMessage(g.target_message_id);
+      }
       this.touch(g.stream_id);
     });
   }
@@ -330,7 +403,7 @@ export class Store {
     return this.tx(() => {
       const slot = this.need('block_slots', slotId), message = this.need('messages', slot.message_id);
       this.assertVisible(slot);
-      if (slot.deleted_at || slot.active_node_id !== expected || !['complete','stopped'].includes(message.status)) throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
+      if (slot.deleted_at || slot.active_node_id !== expected || !['complete','stopped','error','interrupted'].includes(message.status)) throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
       this.assertIdle(message.stream_id);
       if (this.one("SELECT id FROM rewrite_proposals WHERE source_node_id=? AND status='pending'", expected)) throw new AppError(409, 'PENDING_REWRITE', '请先处理重构预览');
       const streamIds: string[] = [];
@@ -351,7 +424,12 @@ export class Store {
         this.pruneDeletedResources();
       } else {
         const blocks = splitMarkdown(markdown);
-        if (!markdown.trim() || !blocks.length) throw new AppError(422, 'EMPTY_BLOCK', '内容不能为空');
+        if (!blocks.length) {
+          for (const branch of this.all('SELECT b.id FROM branches b JOIN content_nodes n ON n.id=b.source_node_id WHERE n.slot_id=?', slotId)) streamIds.push(...this.branchTree(branch.id));
+          for (const child of [...new Set(streamIds)].reverse()) this.run('DELETE FROM streams WHERE id=?', child);
+          this.run('UPDATE block_slots SET deleted_at=? WHERE id=?', now(), slotId); this.pruneDeletedResources();
+          this.removeEmptyMessage(message.id); this.touch(message.stream_id); return { ok: true, streamIds };
+        }
         const node = this.need('content_nodes', expected);
         if (markdown !== node.markdown || blocks.length > 1) {
           const first = blocks[0], nid = id(), version = Number(this.one('SELECT MAX(version_no)+1 AS n FROM content_nodes WHERE slot_id=?', slotId)!.n);
@@ -364,6 +442,7 @@ export class Store {
           this.insertBlocks(slot, blocks.slice(1));
         }
       }
+      this.removeEmptyMessage(message.id);
       this.touch(message.stream_id);
       return { ok: true, streamIds };
     });
@@ -384,7 +463,7 @@ export class Store {
     return this.tx(() => {
       const slot = this.need('block_slots', slotId), message = this.need('messages', slot.message_id);
       this.assertVisible(slot); this.assertIdle(message.stream_id);
-      if (slot.active_node_id !== expected || !['complete','stopped'].includes(message.status)) throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
+      if (slot.active_node_id !== expected || !['complete','stopped','error','interrupted'].includes(message.status)) throw new AppError(409, 'VERSION_CONFLICT', '内容已变化，请刷新后再试');
       const blocks = splitMarkdown(markdown); if (!blocks.length) throw new AppError(422, 'EMPTY_BLOCK', '内容不能为空');
       const ids = this.insertBlocks(slot, blocks); this.touch(message.stream_id); return { slotIds: ids };
     });

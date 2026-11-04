@@ -27,3 +27,6 @@ CREATE TABLE attachments(id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCE
 CREATE INDEX attachment_message ON attachments(message_id);
 CREATE TABLE document_resources(id TEXT PRIMARY KEY, message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE, path TEXT NOT NULL, mime TEXT NOT NULL, data BLOB NOT NULL);
 CREATE INDEX document_resource_message ON document_resources(message_id);
+
+CREATE TABLE folders(id TEXT PRIMARY KEY,name TEXT NOT NULL,parent_id TEXT REFERENCES folders(id) ON DELETE CASCADE,position REAL NOT NULL);
+CREATE TABLE session_folders(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,position REAL NOT NULL);

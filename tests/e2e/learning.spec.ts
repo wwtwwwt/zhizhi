@@ -873,7 +873,7 @@ test('paste/drop attachments and reedit latest answer restore question ahead of 
   await expect(page.locator('.workspace .message-user .message-attachments a')).toHaveCount(2);
 });
 
-test('empty failed answer offers reedit in its right rail', async ({ page, request }) => {
+test('empty failed answer is removed and toast restores question', async ({ page, request }) => {
   await request.put('/api/settings', { data: { confirmDeletion: false } });
   const response = await request.post('/api/models', { data: { name: 'local-error-stub', baseUrl: 'http://127.0.0.1:1/v1', model: 'stub', supportsImages: false, parameters: [], apiKey: 'not-a-real-key' } });
   expect(response.ok()).toBe(true); const model = await response.json();
@@ -883,7 +883,8 @@ test('empty failed answer offers reedit in its right rail', async ({ page, reque
     await page.reload(); await page.getByRole('button', { name: '新的对话', exact: true }).click();
     const input = page.getByRole('textbox', { name: '输入你的问题', exact: true });
     await input.fill('失败的问题'); await page.getByRole('button', { name: '发送问题', exact: true }).click();
-    const button = page.locator('.workspace .message-tools').getByRole('button', { name: '删除此消息并重新编辑', exact: true });
+    await expect(page.locator('.workspace .message-assistant')).toHaveCount(0);
+    const button = page.getByRole('status').getByRole('button', { name: '重新编辑', exact: true });
     await expect(button).toBeEnabled(); await button.click();
     await expect(input).toHaveValue('失败的问题');
     await expect(page.locator('.workspace .message')).toHaveCount(0);
@@ -935,4 +936,96 @@ test('rewrite streaming and completed paragraph styles match main conversation i
   expect(await metrics(source.locator('.rewrite-blocks .content-block:not(.list-block) > .markdown p').first())).toEqual(normal);
   expect(await metrics(source.locator('.rewrite-blocks .list-block > .markdown p').first())).toEqual(list);
   await request.put('/api/settings', { data: { fakeDelay: 0 } });
+});
+
+test('sidebar folders drag sessions, preserve recent dates and release chats on deletion', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { confirmDeletion: true } });
+  const suffix = Date.now();
+  const a = await (await request.post('/api/folders', { data: { name: `文件夹A${suffix}` } })).json();
+  const b = await (await request.post('/api/folders', { data: { name: `文件夹B${suffix}` } })).json();
+  const child = await (await request.post('/api/folders', { data: { name: `子文件夹${suffix}`, parentId: a.id } })).json();
+  const first = await (await request.post('/api/sessions', { data: { title: `拖动会话${suffix}` } })).json();
+  const second = await (await request.post('/api/sessions', { data: { title: `另一会话${suffix}` } })).json();
+  try {
+    await page.goto('/');
+    const folder = (name: string) => page.locator('.folder-row').filter({ has: page.getByRole('button', { name, exact: true }) });
+    const aRow = folder(a.name), bRow = folder(b.name);
+    const row = (name: string) => page.locator('.session-row').filter({ has: page.getByRole('button', { name, exact: true }) });
+    await row(first.title).dragTo(aRow); await aRow.getByRole('button', { name: a.name, exact: true }).click();
+    // Dragging into a folder expands it automatically; ensure children are visible.
+    if (!await folder(child.name).isVisible()) await aRow.getByRole('button', { name: a.name, exact: true }).click();
+    await expect(row(first.title)).toBeVisible();
+    await row(second.title).dragTo(aRow);
+    await row(second.title).dragTo(row(first.title));
+    const members = await (await request.get('/api/sessions')).json();
+    expect(members.find((s: {id:string}) => s.id === second.id).position).toBeLessThan(members.find((s: {id:string}) => s.id === first.id).position);
+    await row(first.title).dragTo(folder(child.name));
+    await expect.poll(async () => (await (await request.get('/api/sessions')).json()).find((s: {id:string}) => s.id === first.id).folder_id).toBe(child.id);
+    await row(second.title).dragTo(bRow);
+    await row(second.title).dragTo(page.locator('.recent-section .sidebar-label'));
+    await expect(page.locator('.recent-section').getByRole('button', { name: second.title, exact: true })).toBeVisible();
+    await aRow.hover(); await aRow.getByTitle('删除文件夹', { exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '删除文件夹', exact: true });
+    await expect(dialog).toContainText('不会删除聊天内容');
+    await dialog.getByRole('button', { name: '删除', exact: true }).click();
+    await expect(page.locator('.recent-section').getByRole('button', { name: first.title, exact: true })).toBeVisible();
+    const dates = await (await request.get('/api/sessions')).json();
+    expect(dates.find((s: {id:string}) => s.id === first.id).updated_at).toBe(first.updated_at);
+  } finally {
+    await request.delete(`/api/folders/${a.id}`); await request.delete(`/api/folders/${b.id}`);
+    await request.delete(`/api/sessions/${first.id}`); await request.delete(`/api/sessions/${second.id}`);
+  }
+});
+
+test('manual stop removes empty answer and toast restores attachments; blur setting persists', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { fakeDelay: 150, blurBackdrop: false } });
+  await page.goto('/'); await page.evaluate(() => localStorage.setItem('lastModelId', 'fake')); await page.reload();
+  await page.getByRole('button', { name: '新的对话', exact: true }).click();
+  const input = page.getByRole('textbox', { name: '输入你的问题', exact: true });
+  await input.fill('停止并恢复附件');
+  await input.dispatchEvent('drop', { dataTransfer: await page.evaluateHandle(() => { const dt = new DataTransfer(); dt.items.add(new File(['original text'], 'stop.txt', { type: 'text/plain' })); return dt; }) });
+  await expect(page.locator('.attachment-chip')).toContainText('stop.txt');
+  await page.getByRole('button', { name: '发送问题', exact: true }).click();
+  await page.getByRole('button', { name: '停止生成', exact: true }).click();
+  const toast = page.getByRole('status');
+  await expect(toast).toContainText('生成已停止');
+  await expect(page.locator('.workspace .message-assistant')).toHaveCount(0);
+  await toast.getByRole('button', { name: '重新编辑', exact: true }).click();
+  await expect(input).toHaveValue('停止并恢复附件');
+  await expect(page.locator('.attachment-chip')).toContainText('stop.txt');
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '通用', exact: true }).click();
+  const blur = page.getByRole('checkbox', { name: '窗口背景模糊', exact: true });
+  await expect(blur).not.toBeChecked(); await blur.check();
+  await expect.poll(async () => (await (await request.get('/api/settings')).json()).blurBackdrop).toBe(true);
+  await page.getByRole('tab', { name: '供应商', exact: true }).click();
+  await page.getByRole('button', { name: '编辑模型：模拟模式', exact: true }).click();
+  const backdrop = page.locator('.model-management-backdrop');
+  expect(await backdrop.evaluate(el => getComputedStyle(el).backdropFilter)).toBe('blur(3px)');
+  const corner = page.getByRole('button', { name: '调整管理窗口：se', exact: true });
+  await corner.focus();
+  for (let i = 0; i < 40; i++) await corner.press('ArrowUp');
+  expect(await page.getByRole('dialog', { name: '配置模型', exact: true }).evaluate(el => getComputedStyle(el).height)).toBe('220px');
+  await request.put('/api/settings', { data: { fakeDelay: 0, blurBackdrop: false } });
+});
+
+test('stop before event subscription still restores the exact original question', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { fakeDelay: 150 } });
+  await page.goto('/'); await page.evaluate(() => localStorage.setItem('lastModelId', 'fake')); await page.reload();
+  await page.getByRole('button', { name: '新的对话', exact: true }).click();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route(/\/api\/streams\/[^/]+$/, async route => { await gate; await route.continue(); });
+  try {
+    const input = page.getByRole('textbox', { name: '输入你的问题', exact: true });
+    await input.fill('立刻停止时仍应恢复这个问题');
+    await page.getByRole('button', { name: '发送问题', exact: true }).click();
+    const cancelled = page.waitForResponse(response => /\/api\/generations\/[^/]+\/cancel$/.test(response.url()) && response.request().method() === 'POST');
+    await page.getByRole('button', { name: '停止生成', exact: true }).click();
+    expect((await cancelled).ok()).toBe(true); release();
+    const toast = page.getByRole('status'); await expect(toast).toContainText('生成已停止');
+    await toast.getByRole('button', { name: '重新编辑', exact: true }).click();
+    await expect(input).toHaveValue('立刻停止时仍应恢复这个问题');
+    await expect(page.locator('.workspace .message')).toHaveCount(0);
+  } finally { release(); await request.put('/api/settings', { data: { fakeDelay: 0 } }); }
 });

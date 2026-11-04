@@ -9,10 +9,12 @@
 | GET /health | 本机服务健康状态 |
 | GET／POST /sessions | 获取概览／用可选title新建会话和主流 |
 | PATCH／DELETE /sessions/:id | 更新title／停止相关生成并删除会话 |
+| GET／POST /folders、PATCH／DELETE /folders/:id | 查询／创建／重命名／删除分类，删除分类不删除会话 |
+| POST /folders/:id/move、POST /sessions/:id/move | 文件夹层级／排序与会话归属／排序；详细字段见14 |
 | GET /streams/:id | 消息、块、当前节点、可用版本、anchors、source、待完成重构 |
 | GET /streams/:id/context | 估算已用预算，可选sourceNodeId截取祖先前缀 |
 | POST /streams/:id/messages | text、requestId、可选modelId／attachments，保存问题与回复任务 |
-| POST /messages/:id/reedit | 原子删除最新问答或空失败问答及相关分支，返回text、attachments、streamIds、parentStreamId；流须空闲，上一条须为user |
+| POST /messages/:id/reedit | 原子删除最新问答及相关分支并返回text、attachments、streamIds、parentStreamId；流须空闲。空AI移除后也接受最新user的ID以恢复原问题；拒绝过期恢复 |
 | DELETE /messages/:id | 删除整条消息及相关分支，返回streamIds、parentStreamId |
 | POST /branches | sourceNodeId、start、end、selectedText、requestId、kind及正文，原子创建分支 |
 | DELETE /branches/:id | 删除分支树，返回streamIds、parentStreamId |
@@ -37,7 +39,7 @@
 | GET／DELETE /storage | 存储统计／以confirm=DELETE_ALL_DATA全量清除 |
 | POST /fake/v1/chat/completions | 内置模拟端点，使用messages、stream和专用__fake字段 |
 
-发送消息允许仅附件输入。分支kind默认question：问题放question，可携带模型和附件；kind=note必须以question提交非空笔记，不创建generation，返回streamId和branch。追问返回generationId、streamId、messageId及branch。模型和文档字段详见[08](08-models-and-attachments.md)与[09](09-document-import.md)。
+发送消息允许仅附件输入。分支kind默认question：问题放question，可携带模型和附件；kind=note必须以question提交非空笔记，不创建generation，返回streamId和branch。追问返回generationId、streamId、messageId、questionMessageId及branch。普通回复同样返回questionMessageId，以便在空回答被清理后准确恢复原问题，避免停止与订阅的时序竞争。模型和文档字段详见[08](08-models-and-attachments.md)与[09](09-document-import.md)。
 
 流中anchor的preview包含question／answer／status，来自首条用户与AI消息当前可见块，纯文本各截取最多180字符。source带parent_stream_id供结束后刷新父流摘要；预览不进入模型上下文。
 
@@ -55,7 +57,7 @@
 
 complete只在数据库提交成功后发送。异常断流不能当完成；停止、错误和断连保存终态及草稿。任务完成时，前端同时替换持久化流并移除流式job，防止定稿正文与草稿同时出现。服务端约250ms节流保存正文草稿，终态立即保存。
 
-SSE解析支持跨chunk UTF-8、CRLF、多行data、注释和多个事件；网络chunk不等于完整事件。关闭弹窗保留全局生成连接；离开页面／刷新断连会中断任务，不支持断点续传。普通回复手动停止时将已生成正文切块并纳入后续上下文，保留stopped状态；停止接口读取内存中的最新正文，避免遗漏尚未周期落库的末尾。失败／意外中断只保留草稿。重构停止不创建部分候选。不提供重试操作，用户可在底部继续提问。
+SSE解析支持跨chunk UTF-8、CRLF、多行data、注释和多个事件；网络chunk不等于完整事件。关闭弹窗保留全局生成连接；离开页面／刷新断连会中断任务，不支持断点续传。普通回复手动停止时将已生成正文切块并纳入后续上下文，保留stopped状态；停止接口读取内存中的最新正文，避免遗漏尚未周期落库的末尾。失败／意外中断也切块已有正文并纳入上下文。无块的终态消息自动清理，前端停止／失败toast可恢复最新问题。重构停止不创建部分候选。不提供重试操作，用户可在底部继续提问。
 
 ## Chat Completions adapter
 

@@ -1029,3 +1029,33 @@ test('stop before event subscription still restores the exact original question'
     await expect(page.locator('.workspace .message')).toHaveCount(0);
   } finally { release(); await request.put('/api/settings', { data: { fakeDelay: 0 } }); }
 });
+
+test('about update controls and logo navigation follow release builds and notification preference', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { updateNotifications: true } });
+  const update = { currentVersion: 'v0.1.0', available: true, checkedAt: Date.now(), release: { tag: 'v0.2.0', name: '新版本', notes: '修复与改进', publishedAt: '2026-11-04T00:00:00Z', url: 'https://github.com/wwtwwwt/zhizhi/releases/tag/v0.2.0' } };
+  let checks = 0;
+  await page.route('**/api/updates', route => route.fulfill({ json: update }));
+  await page.route('**/api/updates/check', route => { checks++; return route.fulfill({ json: update }); });
+  await page.goto('/settings?tab=about');
+  const check = page.getByRole('button', { name: '检查更新', exact: true });
+  await expect(page.getByRole('tab', { name: '关于', exact: true })).toHaveAttribute('aria-selected', 'true');
+  const development = await page.getByText('开发版本', { exact: true }).count();
+  if (development) {
+    await expect(check).toBeDisabled(); expect(checks).toBe(0);
+    await expect(page.getByText('开发版本不检查更新', { exact: true })).toBeVisible();
+    return;
+  }
+  await expect.poll(() => checks).toBe(1);
+  const upgrade = page.getByRole('button', { name: '查看新版本', exact: true });
+  await expect(upgrade).toBeVisible();
+  await page.getByRole('tab', { name: '通用', exact: true }).click(); await upgrade.click();
+  await expect(page.getByRole('tab', { name: '关于', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('link', { name: '前往 GitHub Release 下载 ↗', exact: true })).toHaveAttribute('href', update.release.url);
+  await check.click(); await expect.poll(() => checks).toBe(2);
+  const enabled = page.getByRole('checkbox', { name: '新版本提醒', exact: true }); await enabled.uncheck();
+  await expect(upgrade).toHaveCount(0);
+  await expect.poll(async () => (await (await request.get('/api/settings')).json()).updateNotifications).toBe(false);
+  await page.reload(); await expect(enabled).not.toBeChecked(); expect(checks).toBe(2);
+  await check.click(); await expect.poll(() => checks).toBe(3);
+  await request.put('/api/settings', { data: { updateNotifications: true } });
+});

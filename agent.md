@@ -36,6 +36,8 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 - 侧栏为新对话、两级文件夹、最近对话；文件夹／其内会话支持拖放，最近对话固定按更新时间。删除分类只移回最近对话，不删聊天；独立新表保留现有数据。
 - 默认不模糊弹窗背景，通用blurBackdrop可开启；共享窗口最小高度220px。Toast统一顶部居中，停止／失败可恢复最新用户问题及附件，过期恢复由后端拒绝。编辑为空或删除末块也清理空消息。
 
+- 正式tag构建启动且距上次尝试严格大于12小时检查最新GitHub正式Release；开发构建不检查。提醒开关在关于页，关闭后不自动检查／不显示侧栏升级图标；手动检查可绕过间隔与开关。状态使用现有settings.release-check缓存，版本前后端由ZHIZHI_RELEASE_TAG一致注入。
+
 ## 当前实现
 
 React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型使用Chat Completions adapter，默认固定模拟模型。
@@ -51,6 +53,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-04：GitHub更新提醒及关于页检查／下载完成；9项相关版本／缓存／桌面协议检查通过，正式与开发构建各1项无截图浏览器检查通过，含生产与Electron主进程构建。外部GitHub响应以stub验证，无自动安装。
 
 2026-11-04：侧栏文件夹、空消息自动回收、部分失败输出切块及toast重新编辑、背景模糊偏好与尺寸／品牌／分隔线调整完成。45项相关代码检查、5项无截图浏览器检查及生产／Electron主进程构建通过。文件夹方案获用户确认，最近对话不手动排序。
 
@@ -75,7 +79,7 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 - 真实外部模型尚未端到端调用；协议能力以本机stub验证，不保证所有供应商参数兼容。当前无联网搜索或agent loop，后续另行设计。
 - 论文转换使用InkToMd；可用性、额度、正文和图片完整性依赖外部服务。代理规则见09，Clash本地端口7897。
 - 上下文JSON最多8MiB，另检查模型预算；重构无固定节点数上限，最终组装后检查模型上下文预算，保留关系异常校验。估算不是实际tokenizer。
-- 当前为Electron桌面应用，保留Web开发预览，不是纯静态／PWA。已配置跨平台打包，本轮验证macOS arm64；GitHub tag触发Actions和Releases发布已配置，矩阵为Windows x64／arm64和macOS arm64；使用GITHUB_TOKEN。签名／公证及自动更新后续再做。
+- 当前为Electron桌面应用，保留Web开发预览，不是纯静态／PWA。已配置跨平台打包，本轮验证macOS arm64；GitHub tag触发Actions和Releases发布已配置，矩阵为Windows x64／arm64和macOS arm64；使用GITHUB_TOKEN。签名／公证及自动安装更新后续再做；已支持GitHub Release更新检查与手动下载引导。
 - 无账号、同步、全局画像、代码语法着色、流式断点续传或消息重试。手动停止普通回复后已有正文切块，可编辑、追问并进入后续上下文，保留stopped状态；失败／意外中断也切块已有正文并进入上下文，无块消息移除，重构停止不生成候选。
 
 ## 续接规则

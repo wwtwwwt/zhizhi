@@ -1,6 +1,6 @@
 # 12 · Electron 桌面应用
 
-应用名称「枝知」，英文内部名 `zhizhi`，appId `com.zhizhi.app`。品牌素材来自 `src/assets/zhizhi-mark.svg`；构建自动生成平台图标。发布渠道使用 GitHub Releases＋tag 触发 Actions；工作流只构建 Windows x64、Windows arm64 和 macOS arm64，暂未配置签名、公证或自动更新。
+应用名称「枝知」，英文内部名 `zhizhi`，appId `com.zhizhi.app`。品牌素材来自 `src/assets/zhizhi-mark.svg`；构建自动生成平台图标。发布渠道使用 GitHub Releases＋tag 触发 Actions；工作流只构建 Windows x64、Windows arm64 和 macOS arm64，暂未配置签名、公证或自动安装更新。
 
 ## 运行结构
 
@@ -29,8 +29,12 @@ Store支持注入SecretCodec，桌面入口用safeStorage加密／解密整个�
 
 Release工作流使用原生Node.js 24运行时的官方Actions（checkout／setup-node／upload-artifact v7、download-artifact v8），发布任务固定ubuntu-24.04；macOS构建使用macos-15 ARM64。GitHub托管macOS ARM64容量排队提示由平台产生，工作流无法消除。
 
-当前未配置开发者签名、公证和自动更新。用户负责UI视觉验收，桌面测试仅执行代码和DOM/API断言。
+当前未配置开发者签名、公证和自动安装更新。用户负责UI视觉验收，桌面测试仅执行代码和DOM/API断言。
 
 文档导入：主进程使用系统文件选择器，server/local-document.ts读取所选Markdown及同目录树中引用的图片；通过现有鉴权本地API提供给统一导入窗口，不向渲染进程开放任意路径读写。
 
 菜单：macOS 保留应用／编辑菜单与开发菜单；Windows及Linux不设置应用菜单，避免窗口顶部出现单独的编辑菜单栏。
+
+## 版本与更新提醒
+
+CI的ZHIZHI_RELEASE_TAG同时由Vite注入前端、build-electron.mjs注入Electron主进程，两端共用shared/updates.ts中的releaseVersion。开发构建为空，不检查更新。server/updates.ts负责GitHub最新正式Release读取、12小时尝试缓存与版本比较；前端仅在启动时按偏好触发，手动按钮可绕过间隔。新版本由用户前往GitHub Release下载，不使用electron-updater、自动安装或后台下载。详细行为见10的更新检查。

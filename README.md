@@ -80,4 +80,6 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-等待三个构建任务和发布任务完成后，在仓库 **Releases** 页面复制三个安装包的下载链接；源码包由 GitHub 自动附带。每次构建会从 tag 去掉前缀后同步 package 版本，例如 tag `v0.1.2` 会生成 `zhizhi-0.1.2-win-x64.exe`、`zhizhi-0.1.2-win-arm64.exe` 和 `zhizhi-0.1.2-mac-arm64.dmg`。版本号由 tag 管理，CI 会在临时工作区将 tag 写入 package 版本；不会修改仓库中的 package.json。当前未配置代码签名、公证、自动更新或 GitHub App；未签名的 macOS／Windows 安装包可能显示系统安全提示。后续加入签名时，再把证书和密码放入 GitHub Actions Secrets，不写入仓库。
+等待三个构建任务和发布任务完成后，在仓库 **Releases** 页面复制三个安装包的下载链接；源码包由 GitHub 自动附带。每次构建会从 tag 去掉前缀后同步 package 版本，例如 tag `v0.1.2` 会生成 `zhizhi-0.1.2-win-x64.exe`、`zhizhi-0.1.2-win-arm64.exe` 和 `zhizhi-0.1.2-mac-arm64.dmg`。版本号由 tag 管理，CI 会在临时工作区将 tag 写入 package 版本；不会修改仓库中的 package.json。当前未配置代码签名、公证、自动安装更新或 GitHub App；未签名的 macOS／Windows 安装包可能显示系统安全提示。后续加入签名时，再把证书和密码放入 GitHub Actions Secrets，不写入仓库。
+
+正式 tag 构建支持 GitHub Release 更新提醒：启动时距上次尝试超过12小时才检查；“设置 → 关于”可手动检查、关闭提醒并前往 Release 下载。开发构建不检查更新。

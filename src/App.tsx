@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ArrowUp, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowUpCircle, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
 import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, loadStream, notify, refreshSessions, runGeneration, useAppState } from './client';
 import { createPortal } from 'react-dom';
 import { useCenteredResize } from './useCenteredResize';
 import { layoutSideItems, type Corner } from '../shared/workspace-layout';
+import { releaseVersion } from '../shared/updates';
+import { checkUpdates } from './client';
 import { SessionList } from './SessionList';
 import { ReeditQuestion } from './ReeditQuestion';
 import { ReasoningPanel } from './ReasoningPanel';
@@ -30,6 +32,12 @@ function userInitial(nickname?: string) {
 export function App() {
   const state = useAppState();
   useTheme(state.settings?.theme);
+  const checkedOnStartup = useRef(false);
+  useEffect(() => {
+    if (!state.settings || checkedOnStartup.current) return;
+    checkedOnStartup.current = true;
+    if (releaseVersion && state.settings.updateNotifications) void checkUpdates();
+  }, [state.settings]);
   const [sessionId, setSessionId] = useState<string | null>(localStorage.getItem('lastSession'));
   const [stack, setStack] = useState<Layer[]>([]);
   const [closingFrom, setClosingFrom] = useState<number | null>(null);
@@ -40,6 +48,7 @@ export function App() {
   const [selection, setSelection] = useState<SelectionData | null>(null);
   const [askOpen, setAskOpen] = useState(false), [noteMode, setNoteMode] = useState(false), [creating, setCreating] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [settingsVisit, setSettingsVisit] = useState(0);
   const [page, setPage] = useState(location.pathname === '/settings' ? 'settings' : 'chat');
   const [manage, setManage] = useState<{ session: Session; kind: 'rename' | 'delete' } | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -47,7 +56,7 @@ export function App() {
   useEffect(() => { void refreshSessions().catch(e => notify(e.message)); void loadSettings().catch(e => notify(e.message)); void loadModels().catch(e => notify(e.message)); const pop = () => { setPage(location.pathname === '/settings' ? 'settings' : 'chat'); resetLayers(); setSelection(null); }; window.addEventListener('popstate', pop); return () => window.removeEventListener('popstate', pop); }, []);
   useEffect(() => { if (session) void loadStream(session.root_stream_id).catch(e => notify(e.message)); }, [session?.root_stream_id]);
   useEffect(() => { const update = () => syncFormulaSelection(document.body); document.addEventListener('selectionchange', update); return () => document.removeEventListener('selectionchange', update); }, []);
-  const navigate = (next: string) => { history.pushState({}, '', next === 'settings' ? '/settings' : '/'); setPage(next); setSelection(null); resetLayers(); };
+  const navigate = (next: string) => { if (next === 'about' || next === 'settings') setSettingsVisit(value => value + 1); history.pushState({}, '', next === 'about' ? '/settings?tab=about' : next === 'settings' ? '/settings' : '/'); setPage(next === 'about' ? 'settings' : next); setSelection(null); resetLayers(); };
   const chooseSession = (id: string | null) => { setSessionId(id); if (id) localStorage.setItem('lastSession', id); else localStorage.removeItem('lastSession'); resetLayers(); setSelection(null); if (page !== 'chat') navigate('chat'); };
   const openBranch = (anchor: Anchor, parentDepth: number) => { clearTimeout(closeTimer.current); closeTarget.current = null; setClosingFrom(null); setSelection(null); setAskOpen(false); window.getSelection()?.removeAllRanges(); setStack(prev => [...prev.slice(0, parentDepth), { streamId: anchor.stream_id, quote: anchor.selected_text, branchId: anchor.id }]); void loadStream(anchor.stream_id).catch(e => notify(e.message)); };
   const closeTo = (requested: number) => {
@@ -89,7 +98,7 @@ export function App() {
   };
   return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar" inert={stack.length > 0 || !!manage}>
-      <button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span className="brand-icon"><img src={brandMark} width={22} height={22} alt=""/></span><span>枝知<small>ZHI ZHI</small></span></button>
+      <div className="sidebar-brand"><button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span className="brand-icon"><img src={brandMark} width={22} height={22} alt=""/></span><span>枝知<small>ZHI ZHI</small></span></button>{releaseVersion && state.updates?.available && state.settings?.updateNotifications === true && <button className="icon-button update-indicator" aria-label="查看新版本" title={`新版本 ${state.updates.release?.tag}`} onClick={() => navigate('about')}><ArrowUpCircle size={18}/></button>}</div>
       <button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
       <SessionList selectedId={page === 'chat' ? sessionId : null} onChoose={chooseSession} onManage={(session, kind) => {
         if (kind === 'delete' && state.settings?.confirmDeletion === false) { void api(`/sessions/${session.id}`, 'DELETE').then(async () => { if (sessionId === session.id) chooseSession(null); await refreshSessions(); }).catch(e => notify(e.message)); }
@@ -99,7 +108,7 @@ export function App() {
     </aside>
     <div className="workspace" inert={stack.length > 0 || !!manage}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button sidebar-toggle" aria-label="切换侧栏" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><span className="topbar-divider"/><span>{page === 'settings' ? '设置' : session?.title || '新的对话'}</span></div></header>
-      {page === 'settings' ? <SettingsPage onBack={() => navigate('chat')}/> : <Conversation key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
+      {page === 'settings' ? <SettingsPage key={`${settingsVisit}:${location.search}`} onBack={() => navigate('chat')}/> : <Conversation key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
     </div>
     {stack.length > 0 && <div className={`branch-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''} ${closingFrom === 0 ? 'closing' : ''}`} onClick={() => closeTo(stack.length - 1)}/>}
     {stack.length > 0 && <div className="branch-outside-dismiss" style={{ zIndex: 109 + (stack.length - 1) * 2 }} onClick={() => closeTo(stack.length - 1)}/>}

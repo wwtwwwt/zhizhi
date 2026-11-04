@@ -1,3 +1,4 @@
+import type { UpdateStatus } from '../shared/updates';
 import { useSyncExternalStore } from 'react';
 import { restoreQuestion, type RestoredQuestion } from './composer-drafts';
 import { readSSE } from '../shared/sse';
@@ -5,7 +6,7 @@ import type { ModelConfig } from '../shared/models';
 import type { GenerationResult, Session, Settings, Stream } from '../shared/types';
 
 type Job = { id: string; streamId: string; messageId?: string; nodeId?: string; kind: 'reply' | 'rewrite'; stopping?: boolean; text: string; reasoning: string; reasoningStartedAt?: number; reasoningEndedAt?: number };
-type State = { models: ModelConfig[]; sessions: Session[]; streams: Record<string, Stream>; settings: Settings | null; jobs: Record<string, Job>; toast: string; toastAction?: { label: string; run: () => Promise<void> } };
+type State = { updates?: UpdateStatus; checkingUpdates?: boolean; models: ModelConfig[]; sessions: Session[]; streams: Record<string, Stream>; settings: Settings | null; jobs: Record<string, Job>; toast: string; toastAction?: { label: string; run: () => Promise<void> } };
 let state: State = { models: [], sessions: [], streams: {}, settings: null, jobs: {}, toast: '' };
 const deletedStreams = new Set<string>();
 const listeners = new Set<() => void>();
@@ -87,4 +88,13 @@ export function forgetStreams(streamIds: string[]) {
   streamIds.forEach(id => delete streams[id]);
   for (const [id,job] of Object.entries(jobs)) if (deletedStreams.has(job.streamId)) delete jobs[id];
   patch({streams,jobs});
+}
+
+export async function loadUpdateStatus() { const updates = await api<UpdateStatus>('/updates'); patch({ updates }); }
+export async function checkUpdates(manual = false) {
+  if (state.checkingUpdates) return;
+  patch({ checkingUpdates: true });
+  try { const updates = await api<UpdateStatus>('/updates/check', 'POST', { manual }); patch({ updates }); }
+  catch (error) { if (manual) notify((error as Error).message); }
+  finally { patch({ checkingUpdates: false }); }
 }

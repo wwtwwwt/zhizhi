@@ -30,6 +30,7 @@
 | src/SettingsPage.tsx、ModelManager.tsx | 设置分类、数据页和模型编辑 |
 | src/WindowPanel.tsx、useCenteredResize.ts | 共用管理弹窗、窗口尺寸同步与记忆 |
 | src/DocumentImport.tsx | 文件／论文导入入口 |
+| shared/updates.ts、server/updates.ts | CI版本常量、语义版本比较、GitHub检查与尝试缓存 |
 | server/app.ts | HTTP路由、校验、上游生成生命周期和SSE |
 | server/store.ts、schema.sql | SQLite事务、节点／版本、上下文、重构及资源回收 |
 | server/model-registry.ts、attachments.ts、documents.ts | 模型／密钥、消息附件、文档资源与转换 |

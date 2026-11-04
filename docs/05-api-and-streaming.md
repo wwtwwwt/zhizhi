@@ -27,6 +27,8 @@
 | POST /rewrite-proposals/:id/reject | 保留原文，拒绝候选 |
 | GET /generations/:id/events | 启动queued任务并订阅SSE，单任务只执行一次 |
 | POST /generations/:id/cancel | 停止任务并保存草稿 |
+| GET /updates | 当前构建版本、上次检查、已知Release、available及错误；不请求外部网络 |
+| POST /updates/check | manual布尔值默认false；开发构建不检查，自动检查受偏好与12小时间隔限制，手动可绕过 |
 | GET／PUT /settings | 获取／部分更新通用偏好、fakeDelay |
 | GET／POST /models | 获取模型列表／添加模型 |
 | PUT／DELETE /models/:id | 更新／删除模型，包含图片能力；fake只允许更新fakeDelay且不可删除 |

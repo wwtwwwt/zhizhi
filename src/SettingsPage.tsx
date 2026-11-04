@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Database, Settings, Cpu, RefreshCw, Info } from 'lucide-react';
-import { api, patch, notify, useAppState } from './client';
+import { api, patch, notify, useAppState, loadUpdateStatus, checkUpdates } from './client';
 import { AutoSaveStatus } from './AutoSaveStatus';
 import { useAutoSave } from './useAutoSave';
 import { ModelManager } from './ModelManager';
 import { WindowPanel } from './WindowPanel';
 import { dialogSizeKey } from './useCenteredResize';
 import brandMark from './assets/zhizhi-mark.svg';
+import { releaseVersion, releasesUrl } from '../shared/updates';
 import type { StorageInfo } from '../shared/types';
 
 export function SettingsPage({onBack}:{onBack:()=>void}) {
   const state=useAppState();
-  const [tab,setTab]=useState<'models'|'general'|'data'|'about'>('models');
+  const [tab,setTab]=useState<'models'|'general'|'data'|'about'>(new URLSearchParams(location.search).get('tab') === 'about' ? 'about' : 'models');
   const tabs=[{id:'models' as const,name:'供应商',Icon:Cpu},{id:'general' as const,name:'通用',Icon:Settings},{id:'data' as const,name:'数据',Icon:Database},{id:'about' as const,name:'关于',Icon:Info}];
   return <div className="settings-page settings-layout"><header className="settings-page-header"><button className="back-link" onClick={onBack}><ArrowLeft size={15}/>回到对话</button><h1>设置</h1></header><div className="settings-columns"><nav role="tablist" aria-label="设置分类" aria-orientation="vertical" className="settings-tabs">{tabs.map(({id,name,Icon})=><button key={id} id={`settings-tab-${id}`} role="tab" aria-selected={tab===id} aria-controls={`settings-panel-${id}`} tabIndex={tab===id?0:-1} onClick={()=>setTab(id)} onKeyDown={e=>{if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const index=tabs.findIndex(t=>t.id===id);const target=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowDown'?1:-1)+tabs.length)%tabs.length].id;setTab(target);document.getElementById(`settings-tab-${target}`)?.focus();}}}><Icon size={15}/>{name}</button>)}</nav><section className="settings-tab-content" role="tabpanel" id={`settings-panel-${tab}`} aria-labelledby={`settings-tab-${tab}`}><h2>{tabs.find(t=>t.id===tab)!.name}</h2>{tab==='models'?<ModelManager/>:tab==='general'?(state.settings?<GeneralSettings/>:<div className="loading-label">正在读取设置…</div>):tab==='data'?<DataSettings/>:<AboutSettings/>}</section></div></div>;
 }
@@ -35,10 +36,30 @@ function DataSettings(){
 }
 
 function AboutSettings(){
-  const version=typeof __ZHIZHI_VERSION__ === 'string' ? __ZHIZHI_VERSION__ : '';
+  const state = useAppState();
+  useEffect(() => { void loadUpdateStatus().catch(e => notify(e.message)); }, []);
+  const update = state.updates;
+  const release = update?.release;
+  const checkedAt = update?.checkedAt ? new Date(update.checkedAt).toLocaleString() : '';
   return <div className="about-settings">
     <div className="about-brand"><img src={brandMark} width={52} height={52} alt="枝知图标"/><div><strong>枝知</strong><span>zhizhi</span></div></div>
-    <dl className="about-details"><dt>版本</dt><dd>{version || '开发版本'}</dd><dt>许可证</dt><dd>GNU AGPL-3.0-only</dd></dl>
+    <dl className="about-details"><dt>版本</dt><dd>{releaseVersion || '开发版本'}</dd><dt>许可证</dt><dd>GNU AGPL-3.0-only</dd></dl>
+    <section className="about-updates" aria-label="软件更新">
+      <div className="update-heading"><strong>软件更新</strong><button className="secondary-button" disabled={!releaseVersion || state.checkingUpdates} onClick={() => void checkUpdates(true)}><RefreshCw size={13} className={state.checkingUpdates ? 'update-checking' : ''}/>{state.checkingUpdates ? '检查中…' : '检查更新'}</button></div>
+      {state.settings && <UpdatePreference/>}
+      {!releaseVersion ? <p className="update-status">开发版本不检查更新</p> : <>
+        {update?.available && release ? <div className="release-card"><div><strong>新版本 {release.tag}</strong>{release.publishedAt && <time dateTime={release.publishedAt}>{new Date(release.publishedAt).toLocaleDateString()}</time>}</div>{release.name !== release.tag && <p>{release.name}</p>}{release.notes && <p className="release-notes">{release.notes}</p>}<a className="release-download" href={release.url} target="_blank" rel="noreferrer">前往 GitHub Release 下载 ↗</a></div> : update?.checkedAt && !update.error && <p className="update-status">当前已是最新版本</p>}
+        {update?.error && <p className="update-error" role="alert">{update.error}</p>}
+        {checkedAt && <p className="update-status">上次检查：{checkedAt}</p>}
+      </>}
+    </section>
     <a className="about-repository" href="https://github.com/wwtwwwt/zhizhi" target="_blank" rel="noreferrer">GitHub 仓库 <span aria-hidden="true">↗</span></a>
+    {!release && releaseVersion && <a className="about-repository" href={releasesUrl} target="_blank" rel="noreferrer">GitHub Releases ↗</a>}
   </div>;
+}
+function UpdatePreference() {
+  const state = useAppState();
+  const [enabled, setEnabled] = useState(state.settings!.updateNotifications);
+  const auto = useAutoSave({ updateNotifications: enabled }, async value => { await api('/settings', 'PUT', value); }, 0);
+  return <div className="update-preference"><label className="setting-row"><span className="setting-label">新版本提醒</span><input className="setting-toggle" aria-label="新版本提醒" title="关闭后不再自动检查更新" type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); patch({ settings: { ...state.settings!, updateNotifications: e.target.checked } }); }}/></label><AutoSaveStatus status={auto.status} error={auto.error}/></div>;
 }

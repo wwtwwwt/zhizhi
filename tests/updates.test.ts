@@ -1,0 +1,73 @@
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Store } from '../server/store';
+import { UpdateChecker } from '../server/updates';
+import { compareVersions } from '../shared/updates';
+let store: Store, dir: string;
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'zhizhi-update-')); store = new Store(dir); });
+afterEach(() => { store.db.close(); rmSync(dir, { recursive: true, force: true }); });
+const release = (tag = 'v0.2.0') => new Response(JSON.stringify({ tag_name: tag, name: '版本说明', body: '修复与改进', published_at: '2026-11-04T00:00:00Z', draft: false, prerelease: false }));
+test('versions compare numerically including prerelease precedence and ignore build metadata', () => {
+  expect(compareVersions('v0.1.10', 'v0.1.9')).toBe(1);
+  expect(compareVersions('1.0.0', 'v1.0.0-rc.2')).toBe(1);
+  expect(compareVersions('1.0.0-rc.10', '1.0.0-rc.2')).toBe(1);
+  expect(compareVersions('1.0.0-alpha', '1.0.0-alpha.1')).toBe(-1);
+  expect(compareVersions('1.0.0+123', 'v1.0.0+456')).toBe(0);
+  expect(compareVersions('0.2.0', 'v0.2.0')).toBe(0);
+  expect(compareVersions('v01.0.0', '1.0.0')).toBeNull();
+  expect(compareVersions('latest', '1.0.0')).toBeNull();
+});
+test('development and disabled automatic checks do not request GitHub; manual check bypasses preference', async () => {
+  const request = vi.fn(async () => release());
+  expect((await new UpdateChecker(store, '', request).check(true)).available).toBe(false);
+  store.saveSettings({ ...store.settings(), updateNotifications: false });
+  const checker = new UpdateChecker(store, 'v0.1.0', request);
+  await checker.check(); expect(request).not.toHaveBeenCalled();
+  const result = await checker.check(true); expect(result.available).toBe(true); expect(request).toHaveBeenCalledTimes(1);
+  expect(result.release?.url).toBe('https://github.com/wwtwwwt/zhizhi/releases/tag/v0.2.0');
+});
+test('attempt timestamps survive restart; exactly twelve hours skips; manual bypasses interval', async () => {
+  let now = 100;
+  const request = vi.fn(async () => release());
+  const checker = new UpdateChecker(store, 'v0.1.0', request, () => now);
+  await checker.check(); expect(request).toHaveBeenCalledTimes(1);
+  store.db.close(); store = new Store(dir);
+  const restarted = new UpdateChecker(store, 'v0.1.0', request, () => now);
+  now += 12 * 60 * 60 * 1000;
+  await restarted.check(); expect(request).toHaveBeenCalledTimes(1);
+  now++; await restarted.check(); expect(request).toHaveBeenCalledTimes(2);
+  await restarted.check(true); expect(request).toHaveBeenCalledTimes(3);
+  expect(new UpdateChecker(store, 'v0.2.0', request).status().available).toBe(false);
+});
+test('failed attempts are throttled and retain last known release; concurrent checks share a request', async () => {
+  let now = 1;
+  let response: () => Promise<Response> = async () => release();
+  const request = vi.fn(() => response());
+  const checker = new UpdateChecker(store, 'v0.1.0', request, () => now);
+  await checker.check();
+  response = async () => new Response('', { status: 403 });
+  const failure = await checker.check(true);
+  expect(failure.error).toContain('受限'); expect(failure.release?.tag).toBe('v0.2.0');
+  await checker.check(); expect(request).toHaveBeenCalledTimes(2);
+  now += 13 * 60 * 60 * 1000;
+  let resolve!: (response: Response) => void;
+  response = () => new Promise(r => { resolve = r; });
+  const first = checker.check(); const second = checker.check(true);
+  resolve(release('v0.3.0'));
+  expect((await first).release?.tag).toBe('v0.3.0'); expect(await second).toEqual(await first);
+  expect(request).toHaveBeenCalledTimes(3);
+});
+test('invalid release response is not treated as up to date and full data reset clears cache', async () => {
+  const checker = new UpdateChecker(store, 'v0.1.0', async () => release('nightly'));
+  const result = await checker.check(); expect(result.error).toBeTruthy(); expect(result.release).toBeUndefined();
+  store.clearData(); expect(checker.status().checkedAt).toBeUndefined();
+  expect(store.settings().updateNotifications).toBe(true);
+});
+test('clearing data during a check does not recreate cached release records', async () => {
+  let resolve!: (response: Response) => void;
+  const checker = new UpdateChecker(store, 'v0.1.0', () => new Promise(r => { resolve = r; }));
+  const pending = checker.check(); store.clearData(); resolve(release());
+  await pending; expect(store.one("SELECT value_json FROM settings WHERE key='release-check'")).toBeUndefined();
+});

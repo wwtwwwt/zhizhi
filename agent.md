@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-11-04（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-05（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -53,6 +53,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-05：侧栏文件夹区域支持标题点击折叠动画，收起时禁用内部交互，新建时展开；子内容以缩进和引导线表达归属，缩小根末尾拖放区及最近对话间距。TypeScript检查通过，视觉验收由用户完成。
 
 2026-11-04：侧栏拖动仅文件夹行显示移入蓝框，排序／追加用插入线；不显示指针文字和空文件夹提示，空文件夹不渲染子列表占位、无文件夹不渲染根末尾占位，最近对话不绘制蓝框。空白容器不承接父文件夹落点，行内子元素保持同一目标；相关无截图浏览器检查及生产构建通过。
 

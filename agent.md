@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-11-05（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-07（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -26,7 +26,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 - 外观支持light／dark／system，默认跟随系统；src/theme.ts监听系统主题，localStorage.appearance只用于启动缓存，SQLite settings.theme为权威偏好。
 - 通用设置自动保存，无保存按钮：偏好即时应用，文本防抖450ms；失焦／离开提交待保存项，串行合并写入。模型配置（含模拟模式）使用WindowPanel弹窗，点击保存才生效；取消／关闭不落库。
 - 模型统一逐个配置，fake为固定模型并模拟reasoning；模型配置包含图片能力。输入框不再有默认模型设置，自动记住浏览器上次选择的模型；模型项悬停提示，支持复制配置。附件按图片能力处理，思考摘要与正文分离。
-- 品牌图标使用src/assets/zhizhi-mark.svg：圆形分支节点与Z形连线，用于侧栏、AI头像和网页favicon；交互中的追问／分支图标仍使用GitBranch。
+- 品牌图标使用src/assets/zhizhi-mark.svg：圆形分支节点与Z形连线，用于AI头像和网页favicon（侧栏仅展示枝知文字）；交互中的追问／分支图标仍使用GitBranch。
 - 输入框支持剪贴板File粘贴与拖入，沿用附件限制；最新AI回答可删除本轮并恢复用户正文及附件到本流草稿前部，停止／失败从顶部toast恢复问题；无块终态消息自动清理，后端事务校验并清理分支。Windows／Linux无菜单栏，macOS保留原生菜单。
 - 首页其他文档手动转换引导MinerU，论文自动转换仍用InkToMd。
 - 首页统一导入文档：Markdown在上、论文与转换入口在下；Electron原生选择自动读取同目录引用图片，缺图再选文件夹。图片可打开查看器直接滚轮缩放、左键拖拽平移、触摸板双指平移／捏合缩放，重置缩放及居中。
@@ -53,6 +53,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
 ## 验证基线与限制
+
+2026-11-07：侧栏仅显示枝知文字，文件夹标题箭头移至右侧并与最近对话左对齐；单个文件夹加入展开／收起动画，缩小子内容末尾追加区。TypeScript检查通过，视觉验收由用户完成。
 
 2026-11-05：侧栏文件夹区域支持标题点击折叠动画，收起时禁用内部交互，新建时展开；子内容以缩进和引导线表达归属，缩小根末尾拖放区及最近对话间距。TypeScript检查通过，视觉验收由用户完成。
 

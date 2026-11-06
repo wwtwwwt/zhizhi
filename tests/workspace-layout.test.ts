@@ -8,8 +8,8 @@ test('resizing all corners moves opposite edges symmetrically and respects limit
   expect(resizeCentered(initial, 40, -25, 'ne', viewport)).toEqual({ width: 880, height: 550 });
   expect(resizeCentered(initial, -40, 25, 'sw', viewport)).toEqual({ width: 880, height: 550 });
   expect(resizeCentered(initial, -1000, -1000, 'se', viewport)).toEqual({ width: 520, height: 220 });
-  expect(resizeCentered(initial, 1000, 1000, 'se', viewport)).toEqual({ width: 1416, height: 760 });
-  expect(clampDialogSize(initial, { width: 400, height: 500 })).toEqual({ width: 376, height: 360 });
+  expect(resizeCentered(initial, 1000, 1000, 'se', viewport)).toEqual({ width: 1416, height: 865 });
+  expect(clampDialogSize(initial, { width: 400, height: 500 })).toEqual({ width: 376, height: 465 });
 });
 
 test('side annotations align to blocks and resolve collisions independently of paragraph spacing', () => {

@@ -1,7 +1,7 @@
 export type Size = { width: number; height: number };
 export type Corner = 'nw' | 'ne' | 'sw' | 'se';
 export function clampDialogSize(size: Size, viewport: Size): Size {
-  const maxWidth = Math.max(160, viewport.width - 24), maxHeight = Math.max(160, viewport.height - 140);
+  const maxWidth = Math.max(160, viewport.width - 24), maxHeight = Math.max(160, viewport.height - 35);
   return { width: Math.min(maxWidth, Math.max(Math.min(520, maxWidth), size.width)), height: Math.min(maxHeight, Math.max(Math.min(220, maxHeight), size.height)) };
 }
 export function resizeCentered(size: Size, dx: number, dy: number, corner: Corner, viewport: Size): Size {

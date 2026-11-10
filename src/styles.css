@@ -299,8 +299,19 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 @media(prefers-reduced-motion:reduce){.folder-items-collapse,.folder-items-collapse.collapsed>.folder-items-clip{transition:none}}
 
 /* Native macOS material sits behind transparent sidebar content only. */
-html.native-mac-sidebar,html.native-mac-sidebar body{background:transparent}
-.native-mac-sidebar .sidebar{background:transparent;padding-top:48px;position:relative}
+html.native-sidebar-blur,html.native-sidebar-blur body{background:transparent}
+.native-mac-sidebar .sidebar{padding-top:48px;position:relative}
 .native-mac-sidebar .sidebar:before{content:"";position:absolute;top:0;left:0;right:0;height:46px;-webkit-app-region:drag}
 .native-mac-sidebar .sidebar-brand,.native-mac-sidebar .topbar{-webkit-app-region:drag}
 .native-mac-sidebar .sidebar-brand button,.native-mac-sidebar .topbar button,.native-mac-sidebar .topbar a{-webkit-app-region:no-drag}
+
+/* Native window controls need room even when the sidebar is collapsed. */
+.native-mac-sidebar .sidebar-collapsed .topbar{padding-left:96px}
+.native-mac-sidebar .sidebar-collapsed .sidebar{padding-left:0;padding-right:0}
+.native-sidebar-blur .sidebar{background:transparent;border-right-color:light-dark(#00000012,#ffffff16)}
+.native-sidebar-blur .sidebar-footer{border-top-color:light-dark(#00000012,#ffffff16)}
+.native-sidebar-blur .sidebar .new-chat{background:light-dark(#ffffff28,#ffffff08);border-color:light-dark(#00000018,#ffffff20);box-shadow:none}
+.native-sidebar-blur .sidebar .new-chat:hover,.native-sidebar-blur .sidebar .session-row:hover,.native-sidebar-blur .sidebar .folder-row:hover,.native-sidebar-blur .sidebar .folder-row:focus-within,.native-sidebar-blur .sidebar .settings-link:hover,.native-sidebar-blur .sidebar .icon-button:hover{background:light-dark(#00000009,#ffffff0e)}
+.native-sidebar-blur .sidebar .session-row.active,.native-sidebar-blur .sidebar .settings-link.active{background:light-dark(#00000010,#ffffff18)}
+.native-sidebar-blur .sidebar .session-actions,.native-sidebar-blur .sidebar .session-row:hover .session-actions,.native-sidebar-blur .sidebar .folder-row:hover .session-actions,.native-sidebar-blur .sidebar .folder-row:focus-within .session-actions{background:transparent}
+.native-sidebar-blur .sidebar .folder-children{border-left-color:light-dark(#00000015,#ffffff20)}

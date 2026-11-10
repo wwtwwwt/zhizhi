@@ -1,7 +1,8 @@
-import { app, BrowserWindow, dialog, Menu, safeStorage, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } from 'electron';
 import { createServer, type Server } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Store } from '../server/store';
@@ -70,7 +71,14 @@ async function start() {
   });
   browserSession.setPermissionRequestHandler((_webContents,permission,callback)=>callback(permission==='clipboard-sanitized-write'));
   browserSession.setPermissionCheckHandler((_webContents,permission)=>permission==='clipboard-sanitized-write');
-  const window=new BrowserWindow({width:1240,height:860,minWidth:760,minHeight:540,title:'枝知',backgroundColor:'#ffffff',show:false,...(process.platform === 'darwin' ? {titleBarStyle:'hidden' as const,trafficLightPosition:{x:16,y:16},vibrancy:'sidebar' as const,visualEffectState:'followWindow' as const,backgroundColor:'#00000000'} : {}),webPreferences:{preload:join(here,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  const window=new BrowserWindow({width:1240,height:860,minWidth:760,minHeight:540,title:'枝知',backgroundColor:'#ffffff',show:false,...(process.platform === 'win32' ? {backgroundColor:'#00000000'} : {}),...(process.platform === 'darwin' ? {titleBarStyle:'hidden' as const,trafficLightPosition:{x:16,y:16},visualEffectState:'followWindow' as const,backgroundColor:'#00000000'} : {}),webPreferences:{preload:join(here,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  ipcMain.handle('sidebar-material', (event, enabled: unknown) => {
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || typeof enabled !== 'boolean') return false;
+    if (process.platform === 'darwin') window.setVibrancy(enabled ? 'sidebar' : null);
+    else if (process.platform === 'win32' && Number(release().split('.')[2]) >= 22621) window.setBackgroundMaterial(enabled ? 'acrylic' : 'none');
+    else return false;
+    return process.platform === 'darwin' || process.platform === 'win32';
+  });
   const external=(url:string)=>{try{if(['http:','https:'].includes(new URL(url).protocol))void shell.openExternal(url);}catch{}};
   window.webContents.setWindowOpenHandler(({url})=>{external(url);return {action:'deny'};});
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin){event.preventDefault();external(url);}});

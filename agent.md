@@ -98,4 +98,4 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 4. 只运行与改动相关的检查，文档检查链接与源码对应；功能变更按影响回归。用户负责UI视觉验收。
 5. 更新对应文档和本入口，保存为独立Git提交；保持说明只描述当前实现，历史从Git查看。
 
-macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿嵌入左上角；preload仅暴露nativeSidebar只读标记，透明背景与拖动区域仅桌面mac启用。
+macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿嵌入左上角；preload暴露平台信息和受限材质开关；通用“侧栏系统模糊（Beta）”默认关闭，macOS用vibrancy，Windows11 22H2+用Acrylic。收起侧栏预留96px窗口按钮空间；透明hover和分隔线仅材质启用时应用。

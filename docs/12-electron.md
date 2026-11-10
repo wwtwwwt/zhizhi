@@ -10,7 +10,7 @@ Electron 主进程内运行同一套 Express API 和 SQLite；没有额外 Node 
 
 每次启动随机令牌，由主进程仅向内部来源的 `/api/*` 请求附加；外部请求没有令牌返回401，Origin检查继续生效。内部fake请求单独传递令牌，不把令牌传给真实模型。窗口关闭后中止生成、关闭HTTP连接并关闭数据库，macOS同样退出；单实例运行，重复启动聚焦现有窗口。
 
-BrowserWindow禁用Node集成，启用contextIsolation、sandbox和webSecurity。sandbox preload仅通过contextBridge暴露只读的macOS原生侧栏标记，不暴露Node或IPC操作。拒绝webview和非必要权限；HTTP(S)外链用系统浏览器打开，其他协议不放行。
+BrowserWindow禁用Node集成，启用contextIsolation、sandbox和webSecurity。sandbox preload通过contextBridge暴露平台信息及单一的侧栏材质开关，主进程校验调用窗口、主frame和布尔参数，不暴露通用Node或IPC操作。拒绝webview和非必要权限；HTTP(S)外链用系统浏览器打开，其他协议不放行。
 
 ## 数据
 
@@ -41,4 +41,6 @@ CI的ZHIZHI_RELEASE_TAG同时由Vite注入前端、build-electron.mjs注入Elect
 
 ## macOS 窗口外观
 
-使用原生sidebar vibrancy材质，左栏页面背景透明、正文保持不透明。隐藏独立标题栏，原生红黄绿按钮放在左上角（16px,16px），侧栏顶部预留48px；顶部空白和正文顶栏可拖动窗口，按钮保留点击交互。材质活跃状态跟随窗口，系统辅助功能可能调整模糊效果。浏览器预览及Windows不启用此样式。
+通用设置中的“侧栏系统模糊（Beta）”默认关闭，保存于现有preferences。开启时macOS使用sidebar vibrancy，Windows 11 22H2及以上使用Acrylic；旧Windows保持普通背景。仅左栏页面背景透明、正文保持不透明。隐藏独立标题栏，原生红黄绿按钮放在左上角（16px,16px），侧栏顶部预留48px；顶部空白和正文顶栏可拖动窗口，按钮保留点击交互。材质活跃状态跟随窗口，系统辅助功能可能调整模糊效果。浏览器预览及Windows不启用此样式。
+
+侧栏收起时macOS正文顶栏左侧预留96px给原生窗口按钮。系统材质开启时，侧栏hover／选中背景和分隔线采用低透明度颜色。材质切换即时生效，无需重启；独立弹窗背景模糊仍由原有设置控制。

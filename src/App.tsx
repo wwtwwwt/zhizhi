@@ -11,6 +11,7 @@ import { ReeditQuestion } from './ReeditQuestion';
 import { ReasoningPanel } from './ReasoningPanel';
 import { SendComposer, composerModelId } from './SendComposer';
 import { ImportActions } from './DocumentImport';
+import { useSidebarMaterial } from './desktop';
 import { useTheme } from './theme';
 import { SettingsPage } from './SettingsPage';
 import type { SendOptions } from '../shared/models';
@@ -32,6 +33,7 @@ function userInitial(nickname?: string) {
 export function App() {
   const state = useAppState();
   useTheme(state.settings?.theme);
+  useSidebarMaterial(state.settings?.sidebarBlur === true);
   const checkedOnStartup = useRef(false);
   useEffect(() => {
     if (!state.settings || checkedOnStartup.current) return;

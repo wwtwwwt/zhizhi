@@ -35,6 +35,17 @@ try{
   const runtime=await desktop.evaluate(({app})=>({packaged:app.isPackaged,path:app.getPath('userData'),node:process.versions.node}));
   expect(runtime.path).toBe(dataDir);if(executablePath)expect(runtime.packaged).toBe(true);
   const origin=new URL(page.url()).origin;
+  if(process.platform==='darwin'){
+    await expect(page.locator('html')).toHaveClass(/native-mac-sidebar/);
+    await expect(page.locator('html')).not.toHaveClass(/native-sidebar-blur/);
+    await page.evaluate(async()=>{await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sidebarBlur:true})});});
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/native-sidebar-blur/);
+    await page.evaluate(async()=>{await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sidebarBlur:false})});});
+    await page.reload();
+    await expect(page.locator('html')).not.toHaveClass(/native-sidebar-blur/);
+  }
+
   expect((await fetch(origin+'/api/health')).status).toBe(401);
   const model=await page.evaluate(async()=>{
     const response=await fetch('/api/models',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Desktop Stub',model:'stub',baseUrl:'http://127.0.0.1:9999/v1',supportsImages:false,parameters:[],apiKey:'desktop-smoke-key'})});

@@ -17,7 +17,7 @@ export type Row = Record<string, any>;
 export class AppError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
 const id = () => randomUUID();
 const now = () => new Date().toISOString();
-export const defaults: Settings = { updateNotifications:true, sidebarBlur:false, blurBackdrop:false, autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
+export const defaults: Settings = { updateNotifications:true, sidebarBlur:false, replySystem:null, blurBackdrop:false, autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
 export class Store {
   db: DatabaseSync;
   models: ModelRegistry;
@@ -177,7 +177,7 @@ export class Store {
       return { role: r.role, content: parts.length > 1 ? parts : text };
     }).filter(m => typeof m.content !== 'string' || !!m.content.trim());
   }
-  context(streamId: string): ChatMessage[] { return replyContext(this.resolve(this.refs(streamId))); }
+  context(streamId: string): ChatMessage[] { return replyContext(this.resolve(this.refs(streamId)), this.settings().replySystem); }
   budget(streamId?: string, sourceNodeId?: string) {
     if (!streamId) return { used: 80 };
     const messages = sourceNodeId ? this.resolve(this.refs(streamId, sourceNodeId)) : this.context(streamId);

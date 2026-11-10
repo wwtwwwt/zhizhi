@@ -1,6 +1,7 @@
+import { createPortal } from 'react-dom';
 import { nativeSidebarSupported } from './desktop';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Database, Settings, Cpu, RefreshCw, Info } from 'lucide-react';
+import { ArrowLeft, Database, Settings, Cpu, RefreshCw, Info, SlidersHorizontal } from 'lucide-react';
 import { api, patch, notify, useAppState, loadUpdateStatus, checkUpdates } from './client';
 import { AutoSaveStatus } from './AutoSaveStatus';
 import { useAutoSave } from './useAutoSave';
@@ -11,11 +12,25 @@ import brandMark from './assets/zhizhi-mark.svg';
 import { releaseVersion, releasesUrl } from '../shared/updates';
 import type { StorageInfo } from '../shared/types';
 
-export function SettingsPage({onBack}:{onBack:()=>void}) {
+export function SettingsPage({onBack,sidebar}:{onBack:()=>void;sidebar:HTMLElement | null}) {
   const state=useAppState();
-  const [tab,setTab]=useState<'models'|'general'|'data'|'about'>(new URLSearchParams(location.search).get('tab') === 'about' ? 'about' : 'models');
-  const tabs=[{id:'models' as const,name:'供应商',Icon:Cpu},{id:'general' as const,name:'通用',Icon:Settings},{id:'data' as const,name:'数据',Icon:Database},{id:'about' as const,name:'关于',Icon:Info}];
-  return <div className="settings-page settings-layout"><header className="settings-page-header"><button className="back-link" onClick={onBack}><ArrowLeft size={15}/>回到对话</button><h1>设置</h1></header><div className="settings-columns"><nav role="tablist" aria-label="设置分类" aria-orientation="vertical" className="settings-tabs">{tabs.map(({id,name,Icon})=><button key={id} id={`settings-tab-${id}`} role="tab" aria-selected={tab===id} aria-controls={`settings-panel-${id}`} tabIndex={tab===id?0:-1} onClick={()=>setTab(id)} onKeyDown={e=>{if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const index=tabs.findIndex(t=>t.id===id);const target=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowDown'?1:-1)+tabs.length)%tabs.length].id;setTab(target);document.getElementById(`settings-tab-${target}`)?.focus();}}}><Icon size={15}/>{name}</button>)}</nav><section className="settings-tab-content" role="tabpanel" id={`settings-panel-${tab}`} aria-labelledby={`settings-tab-${tab}`}><h2>{tabs.find(t=>t.id===tab)!.name}</h2>{tab==='models'?<ModelManager/>:tab==='general'?(state.settings?<GeneralSettings/>:<div className="loading-label">正在读取设置…</div>):tab==='data'?<DataSettings/>:<AboutSettings/>}</section></div></div>;
+  const [tab,setTab]=useState<'models'|'general'|'data'|'about'|'personalization'>(new URLSearchParams(location.search).get('tab') === 'about' ? 'about' : 'models');
+  const tabs=[{id:'models' as const,name:'供应商',Icon:Cpu},{id:'general' as const,name:'通用',Icon:Settings},{id:'personalization' as const,name:'个性化',Icon:SlidersHorizontal},{id:'data' as const,name:'数据',Icon:Database},{id:'about' as const,name:'关于',Icon:Info}];
+  return <div className="settings-page settings-layout"><header className="settings-page-header"><button className="back-link" onClick={onBack}><ArrowLeft size={15}/>回到对话</button><h1>设置</h1></header><div className="settings-columns">{sidebar && createPortal(<nav role="tablist" aria-label="设置分类" aria-orientation="vertical" className="settings-tabs">{tabs.map(({id,name,Icon})=><button key={id} id={`settings-tab-${id}`} role="tab" aria-selected={tab===id} aria-controls={`settings-panel-${id}`} tabIndex={tab===id?0:-1} onClick={()=>setTab(id)} onKeyDown={e=>{if(['ArrowDown','ArrowUp','Home','End'].includes(e.key)){e.preventDefault();const index=tabs.findIndex(t=>t.id===id);const target=tabs[e.key==='Home'?0:e.key==='End'?tabs.length-1:(index+(e.key==='ArrowDown'?1:-1)+tabs.length)%tabs.length].id;setTab(target);document.getElementById(`settings-tab-${target}`)?.focus();}}}><Icon size={15}/>{name}</button>)}</nav>, sidebar)}<section className="settings-tab-content" role="tabpanel" id={`settings-panel-${tab}`} aria-labelledby={`settings-tab-${tab}`}><h2>{tabs.find(t=>t.id===tab)!.name}</h2>{tab==='models'?<ModelManager/>:tab==='general'?(state.settings?<GeneralSettings/>:<div className="loading-label">正在读取设置…</div>):tab==='personalization'?<PersonalizationSettings/>:tab==='data'?<DataSettings/>:<AboutSettings/>}</section></div></div>;
+}
+function PersonalizationSettings(){
+  const state=useAppState();
+  const [defaultPrompt,setDefaultPrompt]=useState<string | null>(null);
+  const [error,setError]=useState('');
+  useEffect(()=>{let active=true;void api<{defaultPrompt:string}>('/settings/reply-system').then(value=>{if(active)setDefaultPrompt(value.defaultPrompt);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[]);
+  return state.settings && defaultPrompt !== null ? <PromptEditor defaultPrompt={defaultPrompt}/> : <p className="loading-label">{error || '正在读取提示词…'}</p>;
+}
+function PromptEditor({defaultPrompt}:{defaultPrompt:string}){
+  const state=useAppState();
+  const [value,setValue]=useState<string | null>(state.settings!.replySystem);
+  const auto=useAutoSave(value,async replySystem=>{await api('/settings','PUT',{replySystem});});
+  const change=(replySystem:string | null)=>{setValue(replySystem);if(state.settings)patch({settings:{...state.settings,replySystem}});};
+  return <div className="personalization-settings"><div className="prompt-editor-heading"><label htmlFor="reply-system-editor">系统提示词</label><button className="secondary-button" disabled={value===null} onClick={()=>change(null)}><RefreshCw size={13}/>恢复默认</button></div><p>用于主对话及分支回复。保存后对后续请求生效，不影响已经生成的内容；结合追问重新回答仍使用独立模板。</p><textarea id="reply-system-editor" aria-label="系统提示词" className="prompt-editor" spellCheck={false} maxLength={32000} value={value ?? defaultPrompt} onChange={e=>change(e.target.value)} onBlur={()=>void auto.flush()}/><AutoSaveStatus status={auto.status} error={auto.error}/></div>;
 }
 function GeneralSettings(){
   const state=useAppState();

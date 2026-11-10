@@ -101,3 +101,5 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿嵌入左上角；preload暴露平台信息和受限材质开关；通用“侧栏系统模糊（Beta）”默认关闭，macOS用vibrancy，Windows11 22H2+用Acrylic。收起侧栏预留96px窗口按钮空间；透明hover和分隔线仅材质启用时应用。
 
 系统侧栏材质背景使用高优先级半透明白色提亮（浅色约50%、深色约5%），覆盖普通深色侧栏底色，避免原生模糊被不透明背景遮住。
+
+2026-11-10：设置分类移至应用左侧栏，替代对话列表／文件夹／新建按钮；个性化tab提供replySystem自动保存编辑和恢复默认，覆盖值存在现有preferences（null回退当前JSON模板、空串合法），主流与分支后续普通回复生效，重构模板独立。侧栏滚动条仅滑块、透明轨道。

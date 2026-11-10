@@ -65,3 +65,9 @@ localStorage.lastSession保存最近会话；消息和模型权威数据仍在SQ
 - GitHub源为 https://api.github.com/repos/wwtwwwt/zhizhi/releases/latest ，只接受正式、已发布Release。按语义版本比较（含v前缀、预发布数字顺序，忽略构建元数据），不按字符串排序，不按普通Git标签推送判定更新。
 - 有更新且提醒开启时，侧栏logo右侧显示升级图标，点击打开 /settings?tab=about；即使当前已经在设置的其他Tab也会进入“关于”。关闭提醒后，“关于”页仍可查看已知版本并手动下载。
 - 开发构建不发起GitHub更新检查，手动按钮禁用，显示“开发版本不检查更新”。版本来源仍为CI注入的tag，不使用package.json中固定的开发版本冒充当前版本。
+
+## 个性化与设置导航
+
+进入设置时，应用左侧栏改为供应商、通用、个性化、数据、关于分类，不显示新建对话、文件夹或对话列表。返回对话后恢复列表。
+
+个性化提供系统提示词纯文本编辑器，450ms防抖自动保存、失焦／离开提交；恢复默认也自动保存。最多32000字符，允许空文本。覆盖值保存在现有SQLite preferences.replySystem，null表示使用当前prompts/context.json的replySystem；接口GET /api/settings/reply-system返回当前默认模板，PUT /api/settings保存覆盖值。默认模板文件不会被用户编辑覆盖。

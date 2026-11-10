@@ -521,3 +521,18 @@ test('folders enforce depth and cycles, sort sessions independently, survive res
   expect(s.folders()).toHaveLength(1); expect(s.sessions()).toHaveLength(2); expect(s.sessions().every(v => !v.folder_id)).toBe(true);
   s.clearData(); expect(s.folders()).toHaveLength(0);
 });
+
+test('personalized reply prompt persists, applies to root and branch, and resets to template', () => {
+  const {stream,node}=root('甲乙丙丁');
+  const original=s.context(stream)[0];
+  const custom='定制说明 {{literal}} $&';
+  s.saveSettings({...s.settings(),replySystem:custom});
+  s.db.close();s=new Store(dir);
+  expect(s.context(stream)[0]).toEqual({role:'system',content:custom});
+  const branch=s.createBranch(node.id,0,2,'甲乙','继续解释',uuid());
+  expect(s.context(branch.streamId)[0].content).toBe(custom);
+  s.saveSettings({...s.settings(),replySystem:''});
+  expect(s.context(stream)[0].content).toBe('');
+  s.saveSettings({...s.settings(),replySystem:null});
+  expect(s.context(stream)[0]).toEqual(original);
+});

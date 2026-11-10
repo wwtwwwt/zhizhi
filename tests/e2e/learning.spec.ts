@@ -1088,3 +1088,25 @@ test('about update controls and logo navigation follow release builds and notifi
   await check.click(); await expect.poll(() => checks).toBe(3);
   await request.put('/api/settings', { data: { updateNotifications: true } });
 });
+
+test('settings sidebar and personalized system prompt autosave and reset', async ({page,request})=>{
+  await request.put('/api/settings',{data:{replySystem:null}});
+  const defaults=await (await request.get('/api/settings/reply-system')).json();
+  await page.goto('/settings');
+  await expect(page.locator('.sidebar .settings-tabs')).toBeVisible();
+  await expect(page.locator('.sidebar .new-chat,.sidebar .sidebar-lists')).toHaveCount(0);
+  await page.getByRole('tab',{name:'个性化',exact:true}).click();
+  const editor=page.getByRole('textbox',{name:'系统提示词',exact:true});
+  await expect(editor).toHaveValue(defaults.defaultPrompt);
+  await editor.fill('用简洁中文回答 {{literal}}');
+  await expect.poll(async()=>(await (await request.get('/api/settings')).json()).replySystem).toBe('用简洁中文回答 {{literal}}');
+  await page.getByRole('tab',{name:'通用',exact:true}).click();
+  await page.getByRole('tab',{name:'个性化',exact:true}).click();
+  await expect(editor).toHaveValue('用简洁中文回答 {{literal}}');
+  await page.getByRole('button',{name:'恢复默认',exact:true}).click();
+  await expect(editor).toHaveValue(defaults.defaultPrompt);
+  await expect.poll(async()=>(await (await request.get('/api/settings')).json()).replySystem).toBe(null);
+  await page.getByRole('button',{name:'回到对话',exact:true}).click();
+  await expect(page.locator('.sidebar .new-chat')).toBeVisible();
+  await expect(page.locator('.sidebar .settings-tabs')).toHaveCount(0);
+});

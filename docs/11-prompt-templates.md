@@ -135,3 +135,7 @@ JSON 语法使用双引号，换行写 `\n`，LaTeX 反斜杠写 `\\`。普通�
 `fake.json.reasoning` 是模拟端点通过 reasoning_content 输出的固定摘要，不发送给真实模型，也不参与后续上下文。固定正文按 reply／branch／rewrite 和深度选择 fixture。模型 reasoning_effort、temperature、max_tokens 等是请求参数，不是自然语言模板；context_length 仅用于本地预算。
 
 InkToMd 是文档转换 API，不存在本项目维护的转换模型提示词。当前没有搜索、agent loop、自动标题生成、知识画像或自动测验的隐藏提示词。
+
+## 用户个性化覆盖
+
+replySystem支持设置中的全局覆盖，保存在preferences.replySystem。null使用当前JSON默认模板，字符串（含空字符串）直接作为system内容，不做模板变量替换。每次普通回复组装上下文时读取，作用于主对话与所有分支的后续请求；已发出的请求和历史输出保持原样。rewriteSystem与rewriteRequest仍使用独立模板。恢复默认保存null，因此后续默认模板更新也会生效。

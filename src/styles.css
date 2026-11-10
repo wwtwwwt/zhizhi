@@ -315,3 +315,17 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .native-sidebar-blur .sidebar .session-row.active,.native-sidebar-blur .sidebar .settings-link.active{background:light-dark(#00000010,#ffffff18)}
 .native-sidebar-blur .sidebar .session-actions,.native-sidebar-blur .sidebar .session-row:hover .session-actions,.native-sidebar-blur .sidebar .folder-row:hover .session-actions,.native-sidebar-blur .sidebar .folder-row:focus-within .session-actions{background:transparent}
 .native-sidebar-blur .sidebar .folder-children{border-left-color:light-dark(#00000015,#ffffff20)}
+
+/* Settings navigation occupies the app sidebar. */
+.settings-sidebar{flex:1;min-height:0;overflow:auto;margin-top:20px}
+.settings-sidebar .settings-tabs{border:0;padding:0;gap:3px}
+.settings-sidebar .settings-tabs button{min-height:33px;padding:7px 10px}
+.settings-layout .settings-columns{display:block}
+.prompt-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
+.prompt-editor-heading button{display:flex;align-items:center;gap:5px}
+.personalization-settings>p{font-size:12px;line-height:1.7;color:var(--neutral-3)}
+.prompt-editor{display:block;width:100%;min-height:320px;height:45vh;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--neutral-8);color:var(--neutral-1);font-family:inherit;font-size:14px;line-height:1.8}
+.sidebar .folder-scroll,.sidebar .sessions,.settings-sidebar{scrollbar-width:thin;scrollbar-color:var(--neutral-6,#e1e1e1) transparent}
+.sidebar .folder-scroll::-webkit-scrollbar,.sidebar .sessions::-webkit-scrollbar,.settings-sidebar::-webkit-scrollbar{width:6px}
+.sidebar .folder-scroll::-webkit-scrollbar-track,.sidebar .sessions::-webkit-scrollbar-track,.settings-sidebar::-webkit-scrollbar-track{background:transparent}
+.sidebar .folder-scroll::-webkit-scrollbar-thumb,.sidebar .sessions::-webkit-scrollbar-thumb,.settings-sidebar::-webkit-scrollbar-thumb{background:var(--neutral-6,#e1e1e1);border-radius:6px}

@@ -50,6 +50,7 @@ export function App() {
   const [selection, setSelection] = useState<SelectionData | null>(null);
   const [askOpen, setAskOpen] = useState(false), [noteMode, setNoteMode] = useState(false), [creating, setCreating] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [settingsSidebar,setSettingsSidebar]=useState<HTMLDivElement | null>(null);
   const [settingsVisit, setSettingsVisit] = useState(0);
   const [page, setPage] = useState(location.pathname === '/settings' ? 'settings' : 'chat');
   const [manage, setManage] = useState<{ session: Session; kind: 'rename' | 'delete' } | null>(null);
@@ -101,16 +102,16 @@ export function App() {
   return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar" inert={stack.length > 0 || !!manage}>
       <div className="sidebar-brand"><button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span>枝知</span></button>{releaseVersion && state.updates?.available && state.settings?.updateNotifications === true && <button className="icon-button update-indicator" aria-label="查看新版本" title={`新版本 ${state.updates.release?.tag}`} onClick={() => navigate('about')}><ArrowUpCircle size={18}/></button>}</div>
-      <button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
+      {page === 'settings' ? <div ref={setSettingsSidebar} id="settings-sidebar" className="settings-sidebar"/> : <><button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
       <SessionList selectedId={page === 'chat' ? sessionId : null} onChoose={chooseSession} onManage={(session, kind) => {
         if (kind === 'delete' && state.settings?.confirmDeletion === false) { void api(`/sessions/${session.id}`, 'DELETE').then(async () => { if (sessionId === session.id) chooseSession(null); await refreshSessions(); }).catch(e => notify(e.message)); }
         else { setManage({ session, kind }); setNewTitle(session.title); }
-      }}/>
+      }}/></>}
       <div className="sidebar-footer"><button className={`settings-link ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><SettingsIcon size={17}/>设置</button></div>
     </aside>
     <div className="workspace" inert={stack.length > 0 || !!manage}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button sidebar-toggle" aria-label="切换侧栏" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><span className="topbar-divider"/><span>{page === 'settings' ? '设置' : session?.title || '新的对话'}</span></div></header>
-      {page === 'settings' ? <SettingsPage key={`${settingsVisit}:${location.search}`} onBack={() => navigate('chat')}/> : <Conversation key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
+      {page === 'settings' ? <SettingsPage sidebar={settingsSidebar} key={`${settingsVisit}:${location.search}`} onBack={() => navigate('chat')}/> : <Conversation key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
     </div>
     {stack.length > 0 && <div className={`branch-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''} ${closingFrom === 0 ? 'closing' : ''}`} onClick={() => closeTo(stack.length - 1)}/>}
     {stack.length > 0 && <div className="branch-outside-dismiss" style={{ zIndex: 109 + (stack.length - 1) * 2 }} onClick={() => closeTo(stack.length - 1)}/>}

@@ -9,8 +9,8 @@ export function renderPrompt(name: keyof typeof templates, values: Record<string
   });
 }
 
-export function replyContext(history: ChatMessage[]): ChatMessage[] {
-  return [{ role: 'system', content: renderPrompt('replySystem') }, ...history];
+export function replyContext(history: ChatMessage[], system: string | null = null): ChatMessage[] {
+  return [{ role: 'system', content: system ?? renderPrompt('replySystem') }, ...history];
 }
 
 export function rewriteContext(background: ChatMessage[], original: string, descendants: string): ChatMessage[] {

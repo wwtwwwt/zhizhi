@@ -97,3 +97,5 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 3. 不调用付费真实模型，不寻找其他项目密钥；默认fake或本机stub验证。
 4. 只运行与改动相关的检查，文档检查链接与源码对应；功能变更按影响回归。用户负责UI视觉验收。
 5. 更新对应文档和本入口，保存为独立Git提交；保持说明只描述当前实现，历史从Git查看。
+
+macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿嵌入左上角；preload仅暴露nativeSidebar只读标记，透明背景与拖动区域仅桌面mac启用。

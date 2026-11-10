@@ -10,7 +10,7 @@ Electron 主进程内运行同一套 Express API 和 SQLite；没有额外 Node 
 
 每次启动随机令牌，由主进程仅向内部来源的 `/api/*` 请求附加；外部请求没有令牌返回401，Origin检查继续生效。内部fake请求单独传递令牌，不把令牌传给真实模型。窗口关闭后中止生成、关闭HTTP连接并关闭数据库，macOS同样退出；单实例运行，重复启动聚焦现有窗口。
 
-BrowserWindow禁用Node集成，启用contextIsolation、sandbox和webSecurity。没有preload或渲染侧Node桥。拒绝webview和非必要权限；HTTP(S)外链用系统浏览器打开，其他协议不放行。
+BrowserWindow禁用Node集成，启用contextIsolation、sandbox和webSecurity。sandbox preload仅通过contextBridge暴露只读的macOS原生侧栏标记，不暴露Node或IPC操作。拒绝webview和非必要权限；HTTP(S)外链用系统浏览器打开，其他协议不放行。
 
 ## 数据
 
@@ -38,3 +38,7 @@ Release工作流使用原生Node.js 24运行时的官方Actions（checkout／set
 ## 版本与更新提醒
 
 CI的ZHIZHI_RELEASE_TAG同时由Vite注入前端、build-electron.mjs注入Electron主进程，两端共用shared/updates.ts中的releaseVersion。开发构建为空，不检查更新。server/updates.ts负责GitHub最新正式Release读取、12小时尝试缓存与版本比较；前端仅在启动时按偏好触发，手动按钮可绕过间隔。新版本由用户前往GitHub Release下载，不使用electron-updater、自动安装或后台下载。详细行为见10的更新检查。
+
+## macOS 窗口外观
+
+使用原生sidebar vibrancy材质，左栏页面背景透明、正文保持不透明。隐藏独立标题栏，原生红黄绿按钮放在左上角（16px,16px），侧栏顶部预留48px；顶部空白和正文顶栏可拖动窗口，按钮保留点击交互。材质活跃状态跟随窗口，系统辅助功能可能调整模糊效果。浏览器预览及Windows不启用此样式。

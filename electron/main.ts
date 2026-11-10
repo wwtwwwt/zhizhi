@@ -70,7 +70,7 @@ async function start() {
   });
   browserSession.setPermissionRequestHandler((_webContents,permission,callback)=>callback(permission==='clipboard-sanitized-write'));
   browserSession.setPermissionCheckHandler((_webContents,permission)=>permission==='clipboard-sanitized-write');
-  const window=new BrowserWindow({width:1240,height:860,minWidth:760,minHeight:540,title:'枝知',backgroundColor:'#ffffff',show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  const window=new BrowserWindow({width:1240,height:860,minWidth:760,minHeight:540,title:'枝知',backgroundColor:'#ffffff',show:false,...(process.platform === 'darwin' ? {titleBarStyle:'hidden' as const,trafficLightPosition:{x:16,y:16},vibrancy:'sidebar' as const,visualEffectState:'followWindow' as const,backgroundColor:'#00000000'} : {}),webPreferences:{preload:join(here,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
   const external=(url:string)=>{try{if(['http:','https:'].includes(new URL(url).protocol))void shell.openExternal(url);}catch{}};
   window.webContents.setWindowOpenHandler(({url})=>{external(url);return {action:'deny'};});
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin){event.preventDefault();external(url);}});

@@ -297,3 +297,10 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 .folder-items-clip{min-height:0;overflow:hidden}
 .folder-items-collapse.collapsed>.folder-items-clip{visibility:hidden;transition:visibility 0s 180ms}
 @media(prefers-reduced-motion:reduce){.folder-items-collapse,.folder-items-collapse.collapsed>.folder-items-clip{transition:none}}
+
+/* Native macOS material sits behind transparent sidebar content only. */
+html.native-mac-sidebar,html.native-mac-sidebar body{background:transparent}
+.native-mac-sidebar .sidebar{background:transparent;padding-top:48px;position:relative}
+.native-mac-sidebar .sidebar:before{content:"";position:absolute;top:0;left:0;right:0;height:46px;-webkit-app-region:drag}
+.native-mac-sidebar .sidebar-brand,.native-mac-sidebar .topbar{-webkit-app-region:drag}
+.native-mac-sidebar .sidebar-brand button,.native-mac-sidebar .topbar button,.native-mac-sidebar .topbar a{-webkit-app-region:no-drag}

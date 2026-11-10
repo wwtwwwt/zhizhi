@@ -30,7 +30,7 @@ function PromptEditor({defaultPrompt}:{defaultPrompt:string}){
   const [value,setValue]=useState<string | null>(state.settings!.replySystem);
   const auto=useAutoSave(value,async replySystem=>{await api('/settings','PUT',{replySystem});});
   const change=(replySystem:string | null)=>{setValue(replySystem);if(state.settings)patch({settings:{...state.settings,replySystem}});};
-  return <div className="personalization-settings"><div className="prompt-editor-heading"><label htmlFor="reply-system-editor">系统提示词</label><button className="secondary-button" disabled={value===null} onClick={()=>change(null)}><RefreshCw size={13}/>恢复默认</button></div><textarea id="reply-system-editor" aria-label="系统提示词" className="prompt-editor" spellCheck={false} maxLength={32000} value={value ?? defaultPrompt} onChange={e=>change(e.target.value)} onBlur={()=>void auto.flush()}/><AutoSaveStatus status={auto.status} error={auto.error}/></div>;
+  return <div className="personalization-settings"><div className="prompt-editor-heading"><label htmlFor="reply-system-editor">自定义指令</label><button className="secondary-button" disabled={value===null} onClick={()=>change(null)}><RefreshCw size={13}/>恢复默认</button></div><textarea id="reply-system-editor" aria-label="系统提示词" className="prompt-editor" spellCheck={false} maxLength={32000} value={value ?? defaultPrompt} onChange={e=>change(e.target.value)} onBlur={()=>void auto.flush()}/><AutoSaveStatus status={auto.status} error={auto.error}/></div>;
 }
 function GeneralSettings(){
   const state=useAppState();

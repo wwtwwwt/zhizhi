@@ -308,7 +308,7 @@ html.native-sidebar-blur,html.native-sidebar-blur body{background:transparent}
 /* Native window controls need room even when the sidebar is collapsed. */
 .native-mac-sidebar .sidebar-collapsed .topbar{padding-left:96px}
 .native-mac-sidebar .sidebar-collapsed .sidebar{padding-left:0;padding-right:0}
-html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffffcc,#ffffff0d);border-right-color:light-dark(#00000012,#ffffff16)}
+html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#ffffff0d);border-right-color:light-dark(#00000012,#ffffff16)}
 .native-sidebar-blur .sidebar-footer{border-top-color:light-dark(#00000012,#ffffff16)}
 .native-sidebar-blur .sidebar .new-chat{background:light-dark(#ffffff28,#ffffff08);border-color:light-dark(#00000018,#ffffff20);box-shadow:none}
 .native-sidebar-blur .sidebar .new-chat:hover,.native-sidebar-blur .sidebar .session-row:hover,.native-sidebar-blur .sidebar .folder-row:hover,.native-sidebar-blur .sidebar .folder-row:focus-within,.native-sidebar-blur .sidebar .settings-link:hover,.native-sidebar-blur .sidebar .icon-button:hover{background:light-dark(#00000009,#ffffff0e)}

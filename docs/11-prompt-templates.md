@@ -138,4 +138,4 @@ InkToMd 是文档转换 API，不存在本项目维护的转换模型提示词�
 
 ## 用户个性化覆盖
 
-replySystem支持设置中的全局覆盖，保存在preferences.replySystem。null使用当前JSON默认模板，字符串（含空字符串）直接作为system内容，不做模板变量替换。每次普通回复组装上下文时读取，作用于主对话与所有分支的后续请求；已发出的请求和历史输出保持原样。rewriteSystem与rewriteRequest仍使用独立模板。恢复默认保存null，因此后续默认模板更新也会生效。
+replySystem支持设置→系统提示词中的全局覆盖，保存在preferences.replySystem。null使用当前JSON默认模板，字符串（含空字符串）直接作为system内容，不做模板变量替换。每次普通回复组装上下文时读取，作用于主对话与所有分支的后续请求；已发出的请求和历史输出保持原样。rewriteSystem与rewriteRequest仍使用独立模板。恢复默认保存null，因此后续默认模板更新也会生效。

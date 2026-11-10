@@ -318,12 +318,15 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 
 /* Settings navigation occupies the app sidebar. */
 .settings-sidebar{flex:1;min-height:0;overflow:auto;margin-top:20px}
-.settings-sidebar .settings-tabs{border:0;padding:0;gap:3px}
-.settings-sidebar .settings-tabs button{min-height:33px;padding:7px 10px}
+.settings-sidebar .settings-tabs{border:0;padding:0;gap:1px}
+.settings-sidebar .settings-tabs button{min-height:30px;padding:5px 10px}
 .settings-layout .settings-columns{display:block}
 .prompt-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px}
 .prompt-editor-heading button{display:flex;align-items:center;gap:5px}
-.personalization-settings>p{font-size:12px;line-height:1.7;color:var(--neutral-3)}
+.prompt-editor-heading{margin-bottom:12px}
+.settings-return{padding:0 0 12px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+.settings-return .back-link{display:flex;align-items:center;gap:7px;width:100%;min-height:30px;margin:0;padding:5px 10px;border-radius:5px;text-align:left}
+.settings-return .back-link:hover{background:var(--neutral-7)}
 .prompt-editor{display:block;width:100%;min-height:320px;height:45vh;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--neutral-8);color:var(--neutral-1);font-family:inherit;font-size:14px;line-height:1.8}
 .sidebar .folder-scroll,.sidebar .sessions,.settings-sidebar{scrollbar-width:thin;scrollbar-color:var(--neutral-6,#e1e1e1) transparent}
 .sidebar .folder-scroll::-webkit-scrollbar,.sidebar .sessions::-webkit-scrollbar,.settings-sidebar::-webkit-scrollbar{width:6px}

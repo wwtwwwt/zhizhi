@@ -68,6 +68,8 @@ localStorage.lastSession保存最近会话；消息和模型权威数据仍在SQ
 
 ## 个性化与设置导航
 
-进入设置时，应用左侧栏改为供应商、通用、个性化、数据、关于分类，不显示新建对话、文件夹或对话列表。返回对话后恢复列表。
+进入设置时，应用左侧栏改为供应商、通用、系统提示词、数据、关于分类，不显示新建对话、文件夹或对话列表。返回对话后恢复列表。
 
-个性化提供系统提示词纯文本编辑器，450ms防抖自动保存、失焦／离开提交；恢复默认也自动保存。最多32000字符，允许空文本。覆盖值保存在现有SQLite preferences.replySystem，null表示使用当前prompts/context.json的replySystem；接口GET /api/settings/reply-system返回当前默认模板，PUT /api/settings保存覆盖值。默认模板文件不会被用户编辑覆盖。
+系统提示词分类提供纯文本编辑器，450ms防抖自动保存、失焦／离开提交；恢复默认也自动保存。最多32000字符，允许空文本。覆盖值保存在现有SQLite preferences.replySystem，null表示使用当前prompts/context.json的replySystem；接口GET /api/settings/reply-system返回当前默认模板，PUT /api/settings保存覆盖值。默认模板文件不会被用户编辑覆盖。
+
+“回到对话”位于侧栏品牌下、设置分类上方，独立分区并留间隔；底部设置按钮在设置页再次点击也返回对话。分类项采用30px最小高度和1px间距。系统提示词页仅保留编辑与恢复默认，不显示额外说明段落。

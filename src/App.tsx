@@ -107,7 +107,7 @@ export function App() {
         if (kind === 'delete' && state.settings?.confirmDeletion === false) { void api(`/sessions/${session.id}`, 'DELETE').then(async () => { if (sessionId === session.id) chooseSession(null); await refreshSessions(); }).catch(e => notify(e.message)); }
         else { setManage({ session, kind }); setNewTitle(session.title); }
       }}/></>}
-      <div className="sidebar-footer"><button className={`settings-link ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><SettingsIcon size={17}/>设置</button></div>
+      <div className="sidebar-footer"><button className={`settings-link ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate(page === 'settings' ? 'chat' : 'settings')}><SettingsIcon size={17}/>设置</button></div>
     </aside>
     <div className="workspace" inert={stack.length > 0 || !!manage}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button sidebar-toggle" aria-label="切换侧栏" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><span className="topbar-divider"/><span>{page === 'settings' ? '设置' : session?.title || '新的对话'}</span></div></header>

@@ -102,7 +102,7 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 .messages,.branch-conversation .messages{width:var(--doc-width)}
 .composer-wrap,.branch-conversation .composer-wrap,.empty .composer-wrap,.empty .welcome{width:calc(var(--doc-width) - var(--avatar-space) - var(--doc-rail) - var(--doc-gap));margin-left:calc((100% - var(--doc-width))/2 + var(--avatar-space));margin-right:0;flex-shrink:0}
 .composer.unified-composer,.branch-conversation .composer.unified-composer{padding:9px 10px 6px;min-height:0;overflow:visible;border-radius:8px}
-.unified-composer textarea{padding:0 2px;font-size:13px;line-height:24px;min-height:24px}
+.unified-composer textarea{padding:0 2px;font-size:15px;line-height:24px;min-height:24px}
 .composer-controls,.composer-send-controls,.attachment-controls{display:flex;align-items:center;gap:5px}
 .composer-controls{margin-top:6px;justify-content:space-between;min-height:27px}.composer-controls .icon-button{padding:5px}.composer-send-controls{gap:7px}
 .model-selector{position:relative;min-width:0}.model-switch{display:flex;align-items:center;gap:4px;font-size:11px;padding:4px 3px;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--neutral-2,#666)}.model-switch:hover{color:var(--neutral-0,#222)}

@@ -340,10 +340,11 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 /* Keep the scrollbar at the sidebar edge while preserving row spacing. */
 .recent-section .sessions{margin-right:-8px;padding-right:8px}
 .message-navigation{width:32px;gap:0}
-.message-navigation button{min-height:15px;padding:6px 4px}
-.message-navigation button>span{width:10px;height:2px;border-radius:0;transition:width 140ms ease,background 140ms ease;transform:none!important}
-.message-navigation button[aria-current=location]>span{width:18px}
-.message-navigation button:hover>span,.message-navigation button:focus-visible>span{width:26px}
+.message-navigation button{flex:0 1 15px;height:15px;min-height:3px;padding:0 4px}
+.message-navigation button>span{width:6px;height:2px;border-radius:0;transition:width 140ms ease,background 140ms ease;transform:none!important}
+.message-navigation button>span,.message-navigation button[aria-current=location]>span{width:6px;background:var(--neutral-6,#e1e1e1);opacity:.55}
+.message-navigation:is(:hover,:focus-within) button>span{width:10px;background:var(--neutral-5,#c7c7c7);opacity:1}
+.message-navigation:is(:hover,:focus-within) button:is(:hover,:focus-visible)>span{width:26px;background:var(--neutral-3,#7c7c7c)}
 .message-nav-preview{left:40px;width:330px;max-height:50px;padding:10px 12px}
 .message-nav-preview:after{display:none}
 .message-nav-preview>.nav-question-preview{font-size:12px;color:var(--neutral-1);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:20px}

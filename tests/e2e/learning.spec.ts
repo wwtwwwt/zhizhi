@@ -175,9 +175,7 @@ test('shared side tools, linked branch previews, branch editing and message navi
   await expect(branchTools.locator('.version-switcher')).toHaveCount(0);
   await changeVersion(branchBlock, '上一个版本'); await expect(branchBlock).toContainText('变化趋势');
   await changeVersion(branchBlock, '下一个版本'); await expect(branchBlock).toContainText('分支中的新版本');
-  const nav = page.locator('.top-layer').getByRole('navigation', { name: '消息定位' });
-  await expect(nav.getByRole('button')).toHaveCount(1);
-  await nav.getByRole('button').first().click(); await expect(page.locator('.top-layer .message-assistant').first()).toBeFocused();
+  await expect(page.locator('.top-layer .message-navigation')).toHaveCount(0);
   await branch(page, branchBlock.locator('[data-node]'), '梯度', '继续子分支'); await closeBranch(page);
   await expect(branchTools.getByRole('button', { name: '预览分支：继续子分支' })).toBeVisible();
   await expect((await blockMenu(branchBlock)).getByRole('menuitem', { name: '结合追问重新回答', exact: true })).toBeEnabled();
@@ -194,10 +192,7 @@ test('shared side tools, linked branch previews, branch editing and message navi
   await expect(page.locator('.workspace .message-tools')).toHaveCount(2);
   await page.getByRole('textbox', { name: '输入你的问题' }).fill('第二个问题'); await page.getByRole('button', { name: '发送问题', exact: true }).click();
   await expect(page.locator('.workspace .message-assistant').nth(1).locator('.content-block').first()).toBeVisible();
-  const rootNav = page.locator('.workspace').getByRole('navigation', { name: '消息定位' });
-  await expect(rootNav.getByRole('button')).toHaveCount(2); await rootNav.getByRole('button').first().click();
-  await expect(page.locator('.workspace .message-assistant').first()).toBeFocused();
-  await expect.poll(() => page.locator('.workspace .message-assistant').first().evaluate(el => Math.abs(el.getBoundingClientRect().top - el.closest('.conversation-scroll')!.getBoundingClientRect().top - 8))).toBeLessThan(3);
+  await expect(page.locator('.workspace .message-navigation')).toHaveCount(0);
 });
 
 test('all windows share live resize, remember size after reopen and reload, and keep all corner hit targets', async ({ page, request }) => {
@@ -304,7 +299,15 @@ test('history lives in handle menu; left stacking persists; outside click closes
   await page.getByRole('button', { name: '回到对话', exact: true }).click(); await page.getByRole('button', { name: '新的对话', exact: true }).click();
   await page.getByRole('textbox', { name: '输入你的问题' }).fill('方向和导航测试'); await page.getByRole('button', { name: '发送问题', exact: true }).click();
   const root = page.locator('.workspace .message-assistant .content-block').first(); await expect(root).toBeVisible();
-  const nav = page.locator('.workspace .message-navigation'); await nav.getByRole('button').first().hover();
+  await expect(page.locator('.workspace .message-navigation')).toHaveCount(0);
+  for (const question of ['第二个问题','第三个问题']) {
+    await page.getByRole('textbox',{name:'输入你的问题'}).fill(question);
+    await page.getByRole('button',{name:'发送问题',exact:true}).click();
+    await expect(page.getByRole('button',{name:'停止生成',exact:true})).toHaveCount(0);
+  }
+  const nav = page.locator('.workspace .message-navigation');
+  await expect(nav.getByRole('button')).toHaveCount(3);
+  await nav.getByRole('button').first().hover();
   await expect(page.getByRole('tooltip')).toContainText('方向和导航测试'); await page.getByRole('textbox', { name: '输入你的问题' }).hover(); await expect(page.getByRole('tooltip')).toHaveCount(0);
   await branch(page, root.locator('[data-node]'), '梯度下降', '一级问题'); await expect(page.locator('.top-layer')).toHaveAttribute('data-direction', 'left');
   await branch(page, page.locator('.top-layer .message-assistant [data-node]').first(), '梯度', '二级问题');

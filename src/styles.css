@@ -372,3 +372,8 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .sidebar-resize-handle.ready:after{content:"";position:absolute;left:3px;top:0;bottom:0;width:1px;background:var(--neutral-5)}
 .message-navigation button{flex-basis:10px;height:10px;min-height:3px}
 @media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}
+
+/* Navigation previews pair an optional question with the assistant answer. */
+.message-nav-preview{max-height:180px}
+.message-nav-preview .nav-question-preview{font-size:12px;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--neutral-1);margin-bottom:6px}
+.message-nav-preview .nav-answer-preview{font-size:12px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--neutral-2);max-height:136px;overflow:hidden;mask-image:linear-gradient(#000 0%,#000 calc(100% - 24px),transparent 100%)}

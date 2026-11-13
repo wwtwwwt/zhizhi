@@ -357,3 +357,18 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .native-sidebar-blur .sidebar .session-actions{background:transparent;backdrop-filter:blur(12px);border-radius:4px}
 .native-sidebar-blur .sidebar :is(.sidebar-label,.session-link svg,.icon-button){color:var(--neutral-2)}
 @media(prefers-reduced-motion:reduce){.message-navigation button>span{transition:none}}
+
+/* Clip a fixed-width sidebar canvas instead of squeezing its contents on open. */
+.app-shell .sidebar{width:var(--sidebar-width,208px);flex-basis:var(--sidebar-width,208px);padding:0;overflow:hidden}
+.sidebar-content{width:var(--sidebar-width,208px);min-width:var(--sidebar-width,208px);height:100%;display:flex;flex-direction:column;padding:14px 10px 0}
+.native-mac-sidebar .sidebar-content{padding-top:48px}
+.app-shell.sidebar-collapsed .sidebar{width:0;flex-basis:0;border:0}
+.app-shell .sidebar>.sidebar-content{min-width:var(--sidebar-width,208px)}
+.app-shell:not(.sidebar-collapsed) .workspace{min-width:0}
+.resizing-sidebar .sidebar{transition:none}
+.sidebar-resize-handle{position:absolute;left:calc(var(--sidebar-width) - 4px);top:0;bottom:0;width:8px;z-index:60;touch-action:none;cursor:default;-webkit-app-region:no-drag}
+.sidebar-resize-handle.ready,.sidebar-resizing,.sidebar-resizing *{cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 12l7-6v12zm18 0l-7-6v12z' fill='%23333' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 12 12,ew-resize!important}
+.sidebar-resizing *{user-select:none!important}
+.sidebar-resize-handle.ready:after{content:"";position:absolute;left:3px;top:0;bottom:0;width:1px;background:var(--neutral-5)}
+.message-navigation button{flex-basis:10px;height:10px;min-height:3px}
+@media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}

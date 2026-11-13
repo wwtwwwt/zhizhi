@@ -1119,3 +1119,21 @@ test('settings sidebar and personalized system prompt autosave and reset', async
   await page.locator('.sidebar-footer').getByRole('button',{name:'设置',exact:true}).click();
   await expect(page.locator('.sidebar .new-chat')).toBeVisible();
 });
+
+test('sidebar resize clamps, persists and preserves content width during collapse',async({page})=>{
+  await page.goto('/');
+  const handle=page.getByRole('separator',{name:'调整侧栏宽度'});
+  await expect(handle).toBeVisible();
+  await handle.hover();await expect(handle).toHaveClass(/ready/);
+  const box=await handle.boundingBox();
+  await page.mouse.move(box!.x+4,box!.y+100);await page.mouse.down();await page.mouse.move(600,box!.y+100);await page.mouse.up();
+  await expect(handle).toHaveAttribute('aria-valuenow','360');
+  await page.reload();await expect(handle).toHaveAttribute('aria-valuenow','360');
+  await handle.focus();await page.keyboard.press('Home');await expect(handle).toHaveAttribute('aria-valuenow','180');
+  await page.getByRole('button',{name:'切换侧栏',exact:true}).click();
+  await expect(handle).toHaveCount(0);
+  await expect(page.locator('.sidebar-content')).toHaveCSS('width','180px');
+  await page.getByRole('button',{name:'切换侧栏',exact:true}).click();await expect(handle).toBeVisible();
+  await page.setViewportSize({width:760,height:700});await handle.focus();await page.keyboard.press('End');
+  await expect(handle).toHaveAttribute('aria-valuenow','280');
+});

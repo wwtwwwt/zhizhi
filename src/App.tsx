@@ -1,3 +1,4 @@
+import { useSidebarResize } from './useSidebarResize';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft, ArrowUp, ArrowUpCircle, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
 import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, loadStream, notify, refreshSessions, runGeneration, useAppState } from './client';
@@ -34,6 +35,7 @@ export function App() {
   const state = useAppState();
   useTheme(state.settings?.theme);
   useSidebarMaterial(state.settings?.sidebarBlur === true);
+  const sidebarResize=useSidebarResize();
   const checkedOnStartup = useRef(false);
   useEffect(() => {
     if (!state.settings || checkedOnStartup.current) return;
@@ -99,8 +101,8 @@ export function App() {
       await loadStream(selection.streamId); await refreshSessions(); setSelection(null); window.getSelection()?.removeAllRanges(); return true;
     } catch (e) { notify((e as Error).message); return false; } finally { setCreating(false); }
   };
-  return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
-    <aside className="sidebar" inert={stack.length > 0 || !!manage}>
+  return <div onCopy={copyMarkdownSelection} style={{ '--sidebar-width':`${sidebarResize.width}px`, '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''} ${sidebarResize.resizing ? 'resizing-sidebar' : ''}`} >
+    <aside className="sidebar" inert={collapsed || stack.length > 0 || !!manage}><div className="sidebar-content">
       <div className="sidebar-brand"><div className="brand"><span>枝知</span></div>{releaseVersion && state.updates?.available && state.settings?.updateNotifications === true && <button className="icon-button update-indicator" aria-label="查看新版本" title={`新版本 ${state.updates.release?.tag}`} onClick={() => navigate('about')}><ArrowUpCircle size={18}/></button>}</div>
       {page === 'settings' ? <div ref={setSettingsSidebar} id="settings-sidebar" className="settings-sidebar"/> : <><button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
       <SessionList selectedId={page === 'chat' ? sessionId : null} onChoose={chooseSession} onManage={(session, kind) => {
@@ -108,7 +110,8 @@ export function App() {
         else { setManage({ session, kind }); setNewTitle(session.title); }
       }}/></>}
       <div className="sidebar-footer"><button className={`settings-link ${page === 'settings' ? 'active' : ''}`} onClick={() => navigate(page === 'settings' ? 'chat' : 'settings')}><SettingsIcon size={17}/>设置</button></div>
-    </aside>
+    </div></aside>
+    {!collapsed && !stack.length && !manage && <div className={`sidebar-resize-handle ${sidebarResize.ready ? 'ready' : ''}`} role="separator" aria-label="调整侧栏宽度" aria-orientation="vertical" aria-valuemin={180} aria-valuemax={Math.max(180,Math.min(360,innerWidth-480))} aria-valuenow={sidebarResize.width} tabIndex={0} onPointerEnter={sidebarResize.enter} onPointerLeave={sidebarResize.leave} onPointerDown={sidebarResize.start} onPointerMove={sidebarResize.move} onPointerUp={sidebarResize.stop} onPointerCancel={sidebarResize.stop} onLostPointerCapture={sidebarResize.stop} onKeyDown={e=>{if(sidebarResize.keyboard(e.key))e.preventDefault();}}/>}
     <div className="workspace" inert={stack.length > 0 || !!manage}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button sidebar-toggle" aria-label="切换侧栏" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><span className="topbar-divider"/><span>{page === 'settings' ? '设置' : session?.title || '新的对话'}</span></div></header>
       {page === 'settings' ? <SettingsPage sidebar={settingsSidebar} key={`${settingsVisit}:${location.search}`} onBack={() => navigate('chat')}/> : <Conversation key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
@@ -137,11 +140,13 @@ type ConversationProps = { onImported?: (session: Session) => Promise<void>; str
 function Conversation(props: ConversationProps) {
   const { streamId, depth, onSend } = props; const state = useAppState(); const stream = streamId ? state.streams[streamId] : undefined;
   const scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true), initiallyPositioned = useRef(false), manualGeneration = useRef(false), lastGeneration = useRef('');
+  const [navCenter,setNavCenter]=useState<number | undefined>(undefined);
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
   const [navPreview, setNavPreview] = useState<{ message: Message; top: number } | null>(null);
   const showNavPreview = (message: Message, el: HTMLElement) => { const bounds = el.getBoundingClientRect(), parent = el.closest('.conversation')!.getBoundingClientRect(); setNavPreview({ message, top: Math.max(8, Math.min(bounds.top - parent.top - 16, parent.height - 56)) }); };
   const syncPosition = () => {
     const el = scroll.current; if (!el) return;
+    setNavCenter(el.offsetTop + el.clientHeight / 2);
     nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     const limit = el.getBoundingClientRect().top + 36;
     const messages = [...el.querySelectorAll<HTMLElement>('[data-message]')];
@@ -168,15 +173,16 @@ function Conversation(props: ConversationProps) {
   useEffect(()=>{
     const el=scroll.current, messages=el?.querySelector('.messages'); if(!el || !messages) return;
     const observer=new ResizeObserver(()=>{
+      syncPosition();
       if(state.settings?.autoScroll !== false && !manualGeneration.current && nearBottom.current){el.scrollTop=el.scrollHeight;syncPosition();}
     });
-    observer.observe(messages);return ()=>observer.disconnect();
+    observer.observe(messages);observer.observe(el);return ()=>observer.disconnect();
   },[streamId,empty,state.settings?.autoScroll]);
   return <section className={`conversation ${empty ? 'empty' : ''} ${depth ? 'branch-conversation' : ''}`}>
     {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={stopFollowing} onTouchMove={stopFollowing} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
       <div className="messages"> { !stream && <div className="loading-label">正在打开对话…</div>}{stream?.messages.map(message => <MessageView key={message.id} message={message} {...props}/>)}<div className="end-space"/></div>
     </div>}
-    {assistantCount >= 3 && <nav className="message-navigation" aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; if(previous?.role==='user')showNavPreview(previous,e.currentTarget);else setNavPreview(null); }} onFocus={e => { const previous=stream.messages[i-1]; if(previous?.role==='user')showNavPreview(previous,e.currentTarget);else setNavPreview(null); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
+    {assistantCount >= 3 && <nav className="message-navigation" style={{top:navCenter}} aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; if(previous?.role==='user')showNavPreview(previous,e.currentTarget);else setNavPreview(null); }} onFocus={e => { const previous=stream.messages[i-1]; if(previous?.role==='user')showNavPreview(previous,e.currentTarget);else setNavPreview(null); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><div className="nav-question-preview">{navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join(' ') : navPreview.message.content_markdown}</div></div>}
     <Composer key={streamId || 'new'} streamId={streamId} busy={busy} onSend={onSend} compact={depth > 0}/>
   </section>;

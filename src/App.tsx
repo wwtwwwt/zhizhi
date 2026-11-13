@@ -101,7 +101,7 @@ export function App() {
   };
   return <div onCopy={copyMarkdownSelection} style={{ '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar" inert={stack.length > 0 || !!manage}>
-      <div className="sidebar-brand"><button className="brand" onClick={() => chooseSession(null)} aria-label="枝知首页"><span>枝知</span></button>{releaseVersion && state.updates?.available && state.settings?.updateNotifications === true && <button className="icon-button update-indicator" aria-label="查看新版本" title={`新版本 ${state.updates.release?.tag}`} onClick={() => navigate('about')}><ArrowUpCircle size={18}/></button>}</div>
+      <div className="sidebar-brand"><div className="brand"><span>枝知</span></div>{releaseVersion && state.updates?.available && state.settings?.updateNotifications === true && <button className="icon-button update-indicator" aria-label="查看新版本" title={`新版本 ${state.updates.release?.tag}`} onClick={() => navigate('about')}><ArrowUpCircle size={18}/></button>}</div>
       {page === 'settings' ? <div ref={setSettingsSidebar} id="settings-sidebar" className="settings-sidebar"/> : <><button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
       <SessionList selectedId={page === 'chat' ? sessionId : null} onChoose={chooseSession} onManage={(session, kind) => {
         if (kind === 'delete' && state.settings?.confirmDeletion === false) { void api(`/sessions/${session.id}`, 'DELETE').then(async () => { if (sessionId === session.id) chooseSession(null); await refreshSessions(); }).catch(e => notify(e.message)); }
@@ -139,13 +139,14 @@ function Conversation(props: ConversationProps) {
   const scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true), initiallyPositioned = useRef(false), manualGeneration = useRef(false), lastGeneration = useRef('');
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
   const [navPreview, setNavPreview] = useState<{ message: Message; top: number } | null>(null);
-  const showNavPreview = (message: Message, el: HTMLElement) => { const bounds = el.getBoundingClientRect(), parent = el.closest('.conversation')!.getBoundingClientRect(); setNavPreview({ message, top: Math.max(8, Math.min(bounds.top - parent.top - 16, parent.height - 180)) }); };
+  const showNavPreview = (message: Message, el: HTMLElement) => { const bounds = el.getBoundingClientRect(), parent = el.closest('.conversation')!.getBoundingClientRect(); setNavPreview({ message, top: Math.max(8, Math.min(bounds.top - parent.top - 16, parent.height - 56)) }); };
   const syncPosition = () => {
     const el = scroll.current; if (!el) return;
     nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     const limit = el.getBoundingClientRect().top + 36;
     const messages = [...el.querySelectorAll<HTMLElement>('[data-message]')];
-    const current = messages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || messages[0];
+    const assistantMessages = messages.filter(m => m.classList.contains('message-assistant'));
+    const current = assistantMessages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || assistantMessages[0];
     setActiveMessage(current?.dataset.message || null);
   };
   const jumpToMessage = (id: string) => {
@@ -174,8 +175,8 @@ function Conversation(props: ConversationProps) {
     {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={stopFollowing} onTouchMove={stopFollowing} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
       <div className="messages"> { !stream && <div className="loading-label">正在打开对话…</div>}{stream?.messages.map(message => <MessageView key={message.id} message={message} {...props}/>)}<div className="end-space"/></div>
     </div>}
-    {!empty && <nav className="message-navigation" aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：${message.role === 'user' ? (message.document_name || state.settings?.nickname || '你') : 'AI'}`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => showNavPreview(message, e.currentTarget)} onFocus={e => showNavPreview(message, e.currentTarget)} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button>)}</nav>}
-    {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><div>{navPreview.message.role === 'user' ? (navPreview.message.document_name || state.settings?.nickname || '你') : 'AI'}</div><div className="nav-preview-content markdown"><Markdown source={(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.markdown).join('\n\n') : navPreview.message.content_markdown).slice(0, 600)}/></div></div>}
+    {!empty && <nav className="message-navigation" aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; if(previous?.role==='user')showNavPreview(previous,e.currentTarget);else setNavPreview(null); }} onFocus={e => { const previous=stream.messages[i-1]; if(previous?.role==='user')showNavPreview(previous,e.currentTarget);else setNavPreview(null); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
+    {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><div className="nav-question-preview">{navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join(' ') : navPreview.message.content_markdown}</div></div>}
     <Composer key={streamId || 'new'} streamId={streamId} busy={busy} onSend={onSend} compact={depth > 0}/>
   </section>;
 }

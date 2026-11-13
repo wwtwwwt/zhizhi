@@ -176,8 +176,8 @@ test('shared side tools, linked branch previews, branch editing and message navi
   await changeVersion(branchBlock, '上一个版本'); await expect(branchBlock).toContainText('变化趋势');
   await changeVersion(branchBlock, '下一个版本'); await expect(branchBlock).toContainText('分支中的新版本');
   const nav = page.locator('.top-layer').getByRole('navigation', { name: '消息定位' });
-  await expect(nav.getByRole('button')).toHaveCount(2);
-  await nav.getByRole('button').first().click(); await expect(page.locator('.top-layer .message').first()).toBeFocused();
+  await expect(nav.getByRole('button')).toHaveCount(1);
+  await nav.getByRole('button').first().click(); await expect(page.locator('.top-layer .message-assistant').first()).toBeFocused();
   await branch(page, branchBlock.locator('[data-node]'), '梯度', '继续子分支'); await closeBranch(page);
   await expect(branchTools.getByRole('button', { name: '预览分支：继续子分支' })).toBeVisible();
   await expect((await blockMenu(branchBlock)).getByRole('menuitem', { name: '结合追问重新回答', exact: true })).toBeEnabled();
@@ -195,9 +195,9 @@ test('shared side tools, linked branch previews, branch editing and message navi
   await page.getByRole('textbox', { name: '输入你的问题' }).fill('第二个问题'); await page.getByRole('button', { name: '发送问题', exact: true }).click();
   await expect(page.locator('.workspace .message-assistant').nth(1).locator('.content-block').first()).toBeVisible();
   const rootNav = page.locator('.workspace').getByRole('navigation', { name: '消息定位' });
-  await expect(rootNav.getByRole('button')).toHaveCount(4); await rootNav.getByRole('button').first().click();
-  await expect(page.locator('.workspace .message').first()).toBeFocused();
-  await expect.poll(() => page.locator('.workspace .conversation-scroll').evaluate(el => el.scrollTop)).toBeLessThan(40);
+  await expect(rootNav.getByRole('button')).toHaveCount(2); await rootNav.getByRole('button').first().click();
+  await expect(page.locator('.workspace .message-assistant').first()).toBeFocused();
+  await expect.poll(() => page.locator('.workspace .message-assistant').first().evaluate(el => Math.abs(el.getBoundingClientRect().top - el.closest('.conversation-scroll')!.getBoundingClientRect().top - 8))).toBeLessThan(3);
 });
 
 test('all windows share live resize, remember size after reopen and reload, and keep all corner hit targets', async ({ page, request }) => {

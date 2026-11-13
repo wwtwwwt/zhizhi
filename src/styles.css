@@ -336,3 +336,23 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .sidebar :is(.folder-scroll,.sessions,.settings-sidebar)::-webkit-scrollbar-thumb{background:transparent;border-radius:6px}
 .sidebar :is(.folder-scroll,.sessions,.settings-sidebar):is(:hover,:focus-within)::-webkit-scrollbar-thumb{background:var(--neutral-6,#e1e1e1)}
 .sidebar :is(.folder-scroll,.sessions,.settings-sidebar)::-webkit-scrollbar-button{display:none;width:0;height:0}
+
+/* Keep the scrollbar at the sidebar edge while preserving row spacing. */
+.recent-section .sessions{margin-right:-8px;padding-right:8px}
+.message-navigation{width:32px;gap:0}
+.message-navigation button{min-height:15px;padding:6px 4px}
+.message-navigation button>span{width:10px;height:2px;border-radius:0;transition:width 140ms ease,background 140ms ease;transform:none!important}
+.message-navigation button[aria-current=location]>span{width:18px}
+.message-navigation button:hover>span,.message-navigation button:focus-visible>span{width:26px}
+.message-nav-preview{left:40px;width:330px;max-height:50px;padding:10px 12px}
+.message-nav-preview:after{display:none}
+.message-nav-preview>.nav-question-preview{font-size:12px;color:var(--neutral-1);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:20px}
+/* Material colors use translucent layers rather than opaque theme surfaces. */
+.native-sidebar-blur .sidebar{--sidebar-hover:light-dark(#0000000a,#ffffff12);--sidebar-active:light-dark(#00000014,#ffffff20);color:var(--neutral-1)}
+.native-sidebar-blur .sidebar :is(.session-link,.folder-link,.settings-link,.new-chat,.settings-tabs button,.back-link){color:var(--neutral-1)}
+.native-sidebar-blur .sidebar :is(.session-row,.folder-row,.settings-link,.new-chat,.settings-tabs button,.back-link,.icon-button):is(:hover,:focus-within){background:var(--sidebar-hover)}
+.native-sidebar-blur .sidebar :is(.session-row.active,.settings-link.active,.settings-tabs button[aria-selected=true]){background:var(--sidebar-active)}
+.native-sidebar-blur .sidebar :is(.session-row,.folder-row):is(:hover,:focus-within) .session-actions{background:transparent}
+.native-sidebar-blur .sidebar .session-actions{background:transparent;backdrop-filter:blur(12px);border-radius:4px}
+.native-sidebar-blur .sidebar :is(.sidebar-label,.session-link svg,.icon-button){color:var(--neutral-2)}
+@media(prefers-reduced-motion:reduce){.message-navigation button>span{transition:none}}

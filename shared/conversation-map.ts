@@ -49,7 +49,7 @@ export function layoutConversationMap(data: ConversationMapData) {
     let lane = stream.parentLane + 1;
     while (lanes[lane]?.some(range => start <= range.end && end >= range.start)) lane++;
     (lanes[lane] ||= []).push({ start, end });
-    messages.forEach(message => points.set(message.id, { ...message, x: 24 + lane * 40, y: 24 + rows.get(message.id)! * 28 }));
+    messages.forEach(message => points.set(message.id, { ...message, x: 24 + lane * 34, y: 24 + rows.get(message.id)! * 24 }));
     const branches = [...children.get(stream.streamId) || []].sort((first, second) => (rows.get(first.parentMessageId) ?? 0) - (rows.get(second.parentMessageId) ?? 0));
     for (const branch of branches) {
       if (points.has(branch.parentMessageId)) pending.push({ streamId: branch.anchor.stream_id, parentId: branch.parentMessageId, parentLane: lane });

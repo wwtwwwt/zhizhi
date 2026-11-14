@@ -5,7 +5,7 @@ import type { ConversationMapData } from '../../shared/conversation-map';
 test('large maps scroll on both axes while keeping fixed node spacing', async ({ page, request }) => {
   const session = await (await request.post('/api/sessions', { data: { title: '大地图' } })).json();
   const data: ConversationMapData = { rootStreamId: session.root_stream_id, messages: [], branches: [] };
-  for (let index = 0; index < 24; index++) data.messages.push({ id: `root-${index}`, streamId: data.rootStreamId, parentId: index ? `root-${index - 1}` : null, role: 'assistant', kind: 'assistant', status: 'complete', preview: '主消息' });
+  for (let index = 0; index < 40; index++) data.messages.push({ id: `root-${index}`, streamId: data.rootStreamId, parentId: index ? `root-${index - 1}` : null, role: 'assistant', kind: 'assistant', status: 'complete', preview: '主消息' });
   for (let index = 0; index < 40; index++) {
     const streamId = `branch-${index}`;
     data.branches.push({ anchor: { id: streamId, stream_id: streamId, source_node_id: 'source', start_offset: index, end_offset: index + 1, selected_text: '分支' }, parentMessageId: 'root-0', parentStreamId: data.rootStreamId });
@@ -17,7 +17,7 @@ test('large maps scroll on both axes while keeping fixed node spacing', async ({
   await page.reload();
   await page.getByRole('button', { name: '对话地图', exact: true }).click();
   const viewport = page.locator('.conversation-map-scroll');
-  await expect(viewport.locator('.conversation-map-node')).toHaveCount(64);
+  await expect(viewport.locator('.conversation-map-node')).toHaveCount(80);
   await viewport.hover();
   await page.mouse.wheel(180, 180);
   await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
@@ -32,7 +32,7 @@ test('large maps scroll on both axes while keeping fixed node spacing', async ({
 });
 
 test('map panel opens below topbar, previews dots and navigates root and nested branch messages', async ({ page, request }) => {
-  await request.put('/api/settings', { data: { fakeDelay: 0 } });
+  await request.put('/api/settings', { data: { fakeDelay: 0, blurBackdrop: false } });
   const imported = await (await request.post('/api/documents/import', { data: { name: '地图验证.md', markdown: `## 导入文档\n\n${'这是主对话的长文档，用于验证地图定位。'.repeat(200)}`, resources: [] } })).json();
   const root = await (await request.post(`/api/streams/${imported.root_stream_id}/messages`, { data: { text: '主问题', modelId: 'fake', requestId: randomUUID() } })).json();
   await (await request.get(`/api/generations/${root.generationId}/events`)).text();
@@ -49,25 +49,49 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   await page.evaluate(id => localStorage.setItem('lastSession', id), imported.id);
   await page.reload();
   const toggle = page.getByRole('button', { name: '对话地图', exact: true });
+  const readingBefore = await page.locator('.workspace .conversation-scroll').boundingBox();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const panel = page.getByRole('region', { name: '对话地图', exact: true });
   await expect(panel.locator('.conversation-map-node')).toHaveCount(map.messages.length);
-  const geometry = await panel.evaluate(element => ({ top: element.getBoundingClientRect().top, header: document.querySelector('.topbar')!.getBoundingClientRect().bottom }));
+  const geometry = await panel.evaluate(element => ({ top: element.getBoundingClientRect().top, header: document.querySelector('.topbar')!.getBoundingClientRect().bottom, height: element.getBoundingClientRect().height, available: element.parentElement!.getBoundingClientRect().height }));
   expect(geometry.top).toBe(geometry.header);
+  expect(Math.abs(geometry.height / geometry.available - .9)).toBeLessThan(.01);
+  expect(await page.locator('.workspace .conversation-scroll').boundingBox()).toEqual(readingBefore);
+  expect(await page.locator('.conversation-map-backdrop').evaluate(element => getComputedStyle(element).backdropFilter)).toBe('none');
   const rootNode = panel.locator(`[data-map-message="${map.messages[0].id}"]`);
+  await expect(rootNode).toHaveAttribute('aria-current', 'location');
   await rootNode.hover();
   await expect(page.getByRole('tooltip')).toContainText('主对话的长文档');
+  const tooltip = await page.getByRole('tooltip').boundingBox(), nodeBounds = await rootNode.boundingBox();
+  expect(tooltip!.y - nodeBounds!.y).toBeGreaterThan(20);
+  await page.mouse.move(nodeBounds!.x + 1, nodeBounds!.y + 1);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  expect(await panel.locator('svg path').evaluateAll(paths => paths.every(path => !/[QC]/.test(path.getAttribute('d') || '')))).toBe(true);
   await rootNode.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect.poll(() => page.locator('.workspace .conversation-scroll').evaluate(element => element.scrollTop)).toBe(0);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await toggle.click();
   await panel.locator(`[data-map-message="${noteMessage.id}"]`).click();
   await expect(page.locator('.branch-dialog')).toHaveCount(2);
   await expect(page.locator(`.top-layer [data-message="${noteMessage.id}"]`)).toContainText('深层笔记内容');
   await page.locator('.top-layer').getByRole('button', { name: '主对话', exact: true }).click();
   await expect(page.locator('.branch-dialog')).toHaveCount(0);
   await toggle.click();
+  const backdrop = page.getByRole('button', { name: '关闭对话地图', exact: true });
+  const backdropBounds = await backdrop.boundingBox();
+  await page.mouse.click(backdropBounds!.x + 12, backdropBounds!.y + backdropBounds!.height - 12);
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect.poll(() => page.locator('#conversation-map-panel').evaluate(element => element.getBoundingClientRect().height)).toBe(0);
+  await expect(panel).toBeHidden();
   await expect(page.getByRole('button', { name: /^文档：/ })).toHaveCount(0);
+  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '通用', exact: true }).click();
+  await page.getByRole('checkbox', { name: '窗口背景模糊', exact: true }).check();
+  await page.getByRole('button', { name: '回到对话', exact: true }).click();
+  await toggle.click();
+  await expect(page.locator('.conversation-map-backdrop')).toHaveClass(/blurred/);
+  expect(await page.locator('.conversation-map-backdrop').evaluate(element => getComputedStyle(element).backdropFilter)).toBe('blur(3px)');
+  await toggle.click();
+  await expect(panel).toBeHidden();
 });

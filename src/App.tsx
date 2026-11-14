@@ -2,7 +2,7 @@ import { useSidebarResize } from './useSidebarResize';
 import { Network } from 'lucide-react';
 import { ConversationMap } from './ConversationMap';
 import { mapBranchPath, type ConversationMapData, type MapMessage } from '../shared/conversation-map';
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowLeft, ArrowUp, ArrowUpCircle, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
 import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, loadStream, notify, refreshSessions, runGeneration, useAppState } from './client';
 import { createPortal } from 'react-dom';
@@ -59,6 +59,9 @@ export function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapTarget, setMapTarget] = useState<MapNavigation | null>(null);
+  const [readingMessages, setReadingMessages] = useState<Record<string, string | null>>({});
+  const readingChanged = useCallback((streamId: string, messageId: string | null) => setReadingMessages(previous => previous[streamId] === messageId ? previous : { ...previous, [streamId]: messageId }), []);
+  const closeMap = useCallback(() => { setMapOpen(false); requestAnimationFrame(() => document.querySelector<HTMLElement>('.conversation-map-toggle')?.focus({ preventScroll: true })); }, []);
   const mapRequest = useRef(0);
   const [settingsSidebar,setSettingsSidebar]=useState<HTMLDivElement | null>(null);
   const [settingsVisit, setSettingsVisit] = useState(0);
@@ -84,6 +87,7 @@ export function App() {
         if (!streams[index].messages.some(current => current.slots.some(slot => slot.anchors.some(anchor => anchor.id === branch.anchor.id)))) throw new Error('分支版本已变化，请重新打开对话地图');
       }
       resetLayers(); setSelection(null); setAskOpen(false); window.getSelection()?.removeAllRanges();
+      setMapOpen(false);
       setStack(path.map(branch => ({ streamId: branch.anchor.stream_id, quote: branch.anchor.selected_text, branchId: branch.anchor.id })));
       setMapTarget({ streamId: message.streamId, messageId: message.id, token: request, sources: path.map(branch => ({ streamId: branch.parentStreamId, messageId: branch.parentMessageId })) });
     } catch (error) { notify((error as Error).message); }
@@ -138,12 +142,12 @@ export function App() {
     {!collapsed && !stack.length && !manage && <div className={`sidebar-resize-handle ${sidebarResize.ready ? 'ready' : ''}`} role="separator" aria-label="调整侧栏宽度" aria-orientation="vertical" aria-valuemin={180} aria-valuemax={Math.max(180,Math.min(360,innerWidth-480))} aria-valuenow={sidebarResize.width} tabIndex={0} onPointerEnter={sidebarResize.enter} onPointerLeave={sidebarResize.leave} onPointerDown={sidebarResize.start} onPointerMove={sidebarResize.move} onPointerUp={sidebarResize.stop} onPointerCancel={sidebarResize.stop} onLostPointerCapture={sidebarResize.stop} onKeyDown={e=>{if(sidebarResize.keyboard(e.key))e.preventDefault();}}/>}
     <div className="workspace" inert={stack.length > 0 || !!manage}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button sidebar-toggle" aria-label="切换侧栏" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button><span className="topbar-divider"/><span>{page === 'settings' ? '设置' : session?.title || '新的对话'}</span></div>{page === 'chat' && session && <button className="icon-button conversation-map-toggle" aria-label="对话地图" title="对话地图" aria-expanded={mapOpen} aria-controls="conversation-map-panel" onClick={() => setMapOpen(value => !value)}><Network size={17}/></button>}</header>
-      {page === 'chat' && session && <ConversationMap key={session.id} sessionId={session.id} open={mapOpen} selectedId={mapTarget?.messageId} onJump={jumpFromMap}/>}
-      {page === 'settings' ? <SettingsPage sidebar={settingsSidebar} key={`${settingsVisit}:${location.search}`} onBack={() => navigate('chat')}/> : <Conversation navigation={mapTarget} key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
+      {page === 'chat' && session && <ConversationMap key={session.id} sessionId={session.id} open={mapOpen} selectedId={readingMessages[session.root_stream_id]} onClose={closeMap} onJump={jumpFromMap}/>}
+      {page === 'settings' ? <SettingsPage sidebar={settingsSidebar} key={`${settingsVisit}:${location.search}`} onBack={() => navigate('chat')}/> : <Conversation blocked={mapOpen} onReadingChange={readingChanged} navigation={mapTarget} key={session?.root_stream_id || 'empty'} streamId={session?.root_stream_id} depth={0} onImported={async created => { await refreshSessions(); chooseSession(created.id); await loadStream(created.root_stream_id); }} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>}
     </div>
     {stack.length > 0 && <div className={`branch-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''} ${closingFrom === 0 ? 'closing' : ''}`} onClick={() => closeTo(stack.length - 1)}/>}
     {stack.length > 0 && <div className="branch-outside-dismiss" style={{ zIndex: 109 + (stack.length - 1) * 2 }} onClick={() => closeTo(stack.length - 1)}/>}
-    {stack.map((layer, index) => <BranchLayer navigation={mapTarget} key={layer.streamId} layer={layer} index={index} total={stack.length} closing={closingFrom !== null && index >= closingFrom} onClose={() => closeTo(index)} onJump={closeTo} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>)}
+    {stack.map((layer, index) => <BranchLayer onReadingChange={readingChanged} navigation={mapTarget} key={layer.streamId} layer={layer} index={index} total={stack.length} closing={closingFrom !== null && index >= closingFrom} onClose={() => closeTo(index)} onJump={closeTo} onSend={send} onBranch={openBranch} onSelect={pick} onDismissSelection={() => setSelection(null)}/>)}
     {selection && <div className={`selection-popover ${askOpen ? 'expanded' : ''}`} style={{ left: Math.min(Math.max(16, selection.x), innerWidth - (askOpen ? 382 : 220)), top: Math.min(Math.max(16, selection.y), innerHeight - (askOpen ? 260 : 60)) }}>
       {!askOpen ? <div className="selection-toolbar" role="toolbar" aria-label="选区操作" onMouseDown={e => e.preventDefault()}><button className="selection-trigger" onClick={() => { setAskOpen(true); setNoteMode(false); window.getSelection()?.removeAllRanges(); }}><GitBranch size={14}/>追问</button><button disabled={creating} onClick={() => { setNoteMode(true); setAskOpen(true); window.getSelection()?.removeAllRanges(); }}><StickyNote size={14}/>笔记</button><button onClick={() => { void navigator.clipboard.writeText(selection.raw).then(() => notify('已复制')).catch(() => notify('复制失败')); }}><Copy size={14}/>复制</button></div> : <div className="followup-editor">
         <div className="selection-heading">{noteMode ? <StickyNote size={15}/> : <GitBranch size={15}/>}<span>{noteMode ? '笔记' : '追问'}</span><button type="button" className="icon-button" aria-label={noteMode ? '关闭笔记编辑' : '取消追问'} onClick={() => setSelection(null)}><X size={15}/></button></div>
@@ -161,7 +165,7 @@ function Composer({ streamId, busy, onSend, compact = false }: { streamId?: stri
   return <div className={`composer-wrap ${compact ? 'compact' : ''}`}><SendComposer draftKey={streamId || 'new'} streamId={streamId} busy={busy} label={compact ? '继续分支对话' : '输入你的问题'} placeholder={compact ? '继续追问…' : '输入问题…'} onSend={(text,options) => onSend(text,streamId,options)} onStop={job ? () => void cancelJob(job.id).catch(e=>notify(e.message)) : undefined}/></div>;
 }
 
-type ConversationProps = { navigation?: MapNavigation | null; onImported?: (session: Session) => Promise<void>; streamId?: string; depth: number; onSend: (text: string, id?: string, options?: SendOptions) => Promise<boolean>; onBranch: (anchor: Anchor, depth: number) => void; onSelect: (selection: SelectionData, mode?: 'question' | 'note') => void; onDismissSelection: () => void };
+type ConversationProps = { blocked?: boolean; onReadingChange?: (streamId: string, messageId: string | null) => void; navigation?: MapNavigation | null; onImported?: (session: Session) => Promise<void>; streamId?: string; depth: number; onSend: (text: string, id?: string, options?: SendOptions) => Promise<boolean>; onBranch: (anchor: Anchor, depth: number) => void; onSelect: (selection: SelectionData, mode?: 'question' | 'note') => void; onDismissSelection: () => void };
 function Conversation(props: ConversationProps) {
   const { streamId, depth, onSend } = props; const state = useAppState(); const stream = streamId ? state.streams[streamId] : undefined;
   const scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true), initiallyPositioned = useRef(false), manualGeneration = useRef(false), lastGeneration = useRef('');
@@ -175,6 +179,8 @@ function Conversation(props: ConversationProps) {
     nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     const limit = el.getBoundingClientRect().top + 36;
     const messages = [...el.querySelectorAll<HTMLElement>('[data-message]')];
+    const reading = messages.filter(message => message.getBoundingClientRect().top <= limit).at(-1) || messages[0];
+    if (streamId) props.onReadingChange?.(streamId, reading?.dataset.message || null);
     const assistantMessages = messages.filter(m => m.classList.contains('message-assistant'));
     const current = assistantMessages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || assistantMessages[0];
     setActiveMessage(current?.dataset.message || null);
@@ -210,7 +216,7 @@ function Conversation(props: ConversationProps) {
     nearBottom.current = false; manualGeneration.current = true;
     jumpToMessage(target.messageId);
   }, [props.navigation?.token, streamId]);
-  return <section className={`conversation ${empty ? 'empty' : ''} ${depth ? 'branch-conversation' : ''}`}>
+  return <section className={`conversation ${empty ? 'empty' : ''} ${depth ? 'branch-conversation' : ''}`} inert={props.blocked}>
     {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={stopFollowing} onTouchMove={stopFollowing} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
       <div className="messages"> { !stream && <div className="loading-label">正在打开对话…</div>}{stream?.messages.map(message => <MessageView key={message.id} message={message} {...props}/>)}<div className="end-space"/></div>
     </div>}

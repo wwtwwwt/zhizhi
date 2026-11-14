@@ -378,6 +378,12 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 /* Navigation previews pair an optional question with the assistant answer. */
 .conversation-map-toggle{margin-left:auto;flex-shrink:0;-webkit-app-region:no-drag}
 .conversation-map-toggle[aria-expanded=true]{color:var(--neutral-1,#242424);background:var(--neutral-7,#eeeeee)}
+.topbar-map-controls{display:flex;align-items:center;gap:10px;margin-left:auto;min-width:0;-webkit-app-region:no-drag}
+.topbar-map-search{min-width:0}
+.map-search-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.topbar-map-search .map-search-field{width:clamp(130px,22vw,280px);max-width:100%;padding-top:2px;padding-bottom:2px}
+.topbar-left{min-width:0}
+.topbar-left>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .workspace{position:relative}
 .conversation-map-layer{position:absolute;inset:0;z-index:50;visibility:hidden;pointer-events:none;transition:visibility 0s .22s}
 .conversation-map-layer.open{visibility:visible;pointer-events:auto;transition-delay:0s}
@@ -396,7 +402,11 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .map-search-field button:hover,.map-search-actions button:hover:not(:disabled){color:var(--neutral-1,#242424);background:var(--neutral-7,#eeeeee)}
 .map-search-count{font-size:11px;color:var(--neutral-3,#888888)}
 .map-search-actions{display:flex;gap:4px}
-.map-search-excerpt{flex-basis:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:18px;color:var(--neutral-2,#474747)}
+.map-search-excerpt{width:100%;min-width:0;max-height:min(220px,28vh);overflow:auto;scrollbar-width:thin;padding:5px 8px;font-size:13px;line-height:1.65;color:var(--neutral-2,#474747)}
+.map-search-excerpt .markdown{font-size:13px}
+.map-search-excerpt .content-block{pointer-events:none}
+@keyframes search-jump-flash{0%,35%{background-color:var(--highlight);box-shadow:0 0 0 4px var(--highlight)}100%{background-color:transparent;box-shadow:0 0 0 4px transparent}}
+.search-jump-highlight{animation:search-jump-flash 1.8s ease-out}
 .conversation-map-scroll{height:100%;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--neutral-6,#dedede) transparent}
 .conversation-map-stage{width:max-content;min-width:100%;min-height:100%;display:flex;align-items:center;justify-content:center}
 .conversation-map-canvas{position:relative;flex-shrink:0}

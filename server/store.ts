@@ -152,7 +152,8 @@ export class Store {
       const index = text.toLowerCase().indexOf(needle);
       if (index < 0) continue;
       const start = Math.max(0, index - 45), end = Math.min(text.length, index + needle.length + 100);
-      hits.push({ messageId: message.id, excerpt: `${start ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}` });
+      const slot = this.visibleSlots(message.id).find(slot => this.need('content_nodes', slot.active_node_id).selection_text.toLowerCase().includes(needle));
+      hits.push({ messageId: message.id, excerpt: `${start ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`, slotId: slot?.id, nodeId: slot?.active_node_id, quote: !slot && !!branch?.anchor.selected_text.toLowerCase().includes(needle) });
     }
     return hits;
   }

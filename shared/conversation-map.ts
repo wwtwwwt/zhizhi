@@ -4,7 +4,7 @@ export type MapMessage = { id: string; streamId: string; parentId: string | null
 export type MapBranch = { anchor: Anchor; parentMessageId: string; parentStreamId: string };
 export type ConversationMapData = { rootStreamId: string; messages: MapMessage[]; branches: MapBranch[] };
 export type MapPoint = MapMessage & { x: number; y: number };
-export type MapSearchHit = { messageId: string; excerpt: string };
+export type MapSearchHit = { messageId: string; excerpt: string; slotId?: string; nodeId?: string; quote?: boolean };
 
 export function layoutConversationMap(data: ConversationMapData) {
   const groups = new Map<string, MapMessage[]>();

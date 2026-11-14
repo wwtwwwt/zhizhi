@@ -3,10 +3,12 @@ import { createPortal } from 'react-dom';
 import { ArrowUpRight, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { layoutConversationMap, type ConversationMapData, type MapMessage, type MapSearchHit } from '../shared/conversation-map';
 import { useAppState } from './client';
+import { MarkdownBlocks } from './StreamingMarkdown';
+import type { RenderMeta, Stream } from '../shared/types';
 
 const kindLabels = { user: '用户', assistant: 'AI', note: '笔记', document: '文档' };
 
-export function ConversationMap({ sessionId, open, selectedId, onClose, onJump }: { sessionId: string; open: boolean; selectedId?: string | null; onClose: () => void; onJump: (message: MapMessage, data: ConversationMapData) => Promise<void> }) {
+export function ConversationMap({ sessionId, open, selectedId, searchHost, onClose, onJump }: { sessionId: string; open: boolean; selectedId?: string | null; searchHost: HTMLElement | null; onClose: () => void; onJump: (message: MapMessage, data: ConversationMapData, hit?: MapSearchHit) => Promise<void> }) {
   const state = useAppState();
   const [data, setData] = useState<ConversationMapData | null>(null);
   const [error, setError] = useState('');
@@ -17,6 +19,7 @@ export function ConversationMap({ sessionId, open, selectedId, onClose, onJump }
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [resultIndex, setResultIndex] = useState(0);
+  const [blockPreview, setBlockPreview] = useState<{ markdown: string; meta?: RenderMeta } | null>(null);
   const [preview, setPreview] = useState<{ message: MapMessage; left: number; top: number } | null>(null);
   const viewport = useRef<HTMLDivElement>(null);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -61,6 +64,26 @@ export function ConversationMap({ sessionId, open, selectedId, onClose, onJump }
   const branches = useMemo(() => new Map(data?.branches.map(branch => [branch.anchor.stream_id, branch])), [data]);
   const matches = useMemo(() => new Set(searchHits.map(hit => hit.messageId)), [searchHits]);
   const currentHit = searchHits[resultIndex];
+  useEffect(() => {
+    setBlockPreview(null);
+    if (!open || !currentHit) return;
+    const message = data?.messages.find(message => message.id === currentHit.messageId);
+    if (!message) return;
+    if (currentHit.quote) { setBlockPreview({ markdown: branches.get(message.streamId)?.anchor.selected_text || currentHit.excerpt }); return; }
+    if (!currentHit.slotId) { setBlockPreview({ markdown: currentHit.excerpt }); return; }
+    const select = (stream: Stream) => stream.messages.find(message => message.id === currentHit.messageId)?.slots.find(slot => slot.id === currentHit.slotId && slot.node.id === currentHit.nodeId);
+    const cached = state.streams[message.streamId];
+    const slot = cached && select(cached);
+    if (slot) { setBlockPreview({ markdown: slot.node.markdown, meta: slot.meta }); return; }
+    const abort = new AbortController();
+    void fetch(`/api/streams/${message.streamId}`, { signal: abort.signal }).then(async response => {
+      if (!response.ok) throw new Error('预览不可用');
+      const stream = await response.json() as Stream;
+      const slot = select(stream);
+      if (!abort.signal.aborted) setBlockPreview(slot ? { markdown: slot.node.markdown, meta: slot.meta } : { markdown: currentHit.excerpt });
+    }).catch(() => { if (!abort.signal.aborted) setBlockPreview({ markdown: currentHit.excerpt }); });
+    return () => abort.abort();
+  }, [open, currentHit, data, branches]);
   const centerNode = (id: string) => {
     const element = viewport.current, node = element?.querySelector<HTMLElement>(`[data-map-message="${CSS.escape(id)}"]`);
     if (!element || !node) return;
@@ -91,7 +114,7 @@ export function ConversationMap({ sessionId, open, selectedId, onClose, onJump }
   const jump = (message: MapMessage) => {
     if (!data || jumping) return;
     hidePreview(); setJumping(true);
-    void onJump(message, data).finally(() => setJumping(false));
+    void onJump(message, data, searchHits.find(hit => hit.messageId === message.id)).finally(() => setJumping(false));
   };
   const showPreview = (message: MapMessage, x: number, y: number, delay = 160) => {
     clearTimeout(previewTimer.current);
@@ -104,10 +127,10 @@ export function ConversationMap({ sessionId, open, selectedId, onClose, onJump }
   return <div ref={layer} className={`conversation-map-layer ${open ? 'open' : ''}`} style={{ top: headerHeight }} aria-hidden={!open} inert={!open}>
     <button className={`conversation-map-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''}`} tabIndex={-1} aria-label="关闭对话地图" onClick={onClose}/>
     <section id="conversation-map-panel" className="conversation-map-panel" aria-label="对话地图">
-    <div className="conversation-map-toolbar"><label className="map-search-field"><Search size={14}/><input type="search" aria-label="搜索对话地图" placeholder="搜索消息和引用内容" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); moveResult(event.shiftKey ? -1 : 1); } if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); setQuery(''); } }}/>{query && <button aria-label="清除地图搜索" onClick={() => setQuery('')}><X size={13}/></button>}</label>
+    {open && searchHost && createPortal(<div className="map-search-controls"><label className="map-search-field"><Search size={14}/><input type="search" aria-label="搜索对话地图" placeholder="搜索消息和引用内容" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); moveResult(event.shiftKey ? -1 : 1); } if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); setQuery(''); } }}/>{query && <button aria-label="清除地图搜索" onClick={() => setQuery('')}><X size={13}/></button>}</label>
       {query.trim() && <><output className="map-search-count" aria-live="polite">{searching ? '搜索中…' : searchError || (searchHits.length ? `${resultIndex + 1} / ${searchHits.length}` : '无结果')}</output><div className="map-search-actions"><button aria-label="上一个搜索结果" disabled={!searchHits.length} onClick={() => moveResult(-1)}><ChevronUp size={15}/></button><button aria-label="下一个搜索结果" disabled={!searchHits.length} onClick={() => moveResult(1)}><ChevronDown size={15}/></button><button aria-label="打开搜索结果" disabled={!currentHit || jumping} onClick={() => { const message = currentHit && points.get(currentHit.messageId); if (message) jump(message); }}><ArrowUpRight size={15}/></button></div></>}
-      {currentHit && <div className="map-search-excerpt" title={currentHit.excerpt}>{currentHit.excerpt}</div>}
-    </div>
+    </div>, searchHost)}
+    {query.trim() && <div className="conversation-map-toolbar searching">{currentHit && <div className={`map-search-excerpt ${blockPreview?.meta?.quote ? 'quoted' : ''}`} role="region" aria-label="搜索内容预览">{blockPreview ? <MarkdownBlocks source={blockPreview.markdown} firstMeta={blockPreview.meta}/> : <p>{currentHit.excerpt}</p>}</div>}</div>}
     <div className="conversation-map-clip"><div className="conversation-map-scroll" ref={viewport} onScroll={hidePreview} onMouseLeave={hidePreview}>
       {error ? <p className="conversation-map-status" role="alert">{error}</p> : !layout ? <p className="conversation-map-status" role="status">{loading ? '正在读取地图…' : ''}</p> : !layout.nodes.length ? <p className="conversation-map-status">暂无消息</p> : <div className="conversation-map-stage"><div className={`conversation-map-canvas ${query.trim() && !searching && !searchError ? 'searching' : ''}`} style={{ width: layout.width, height: layout.height }}>
         <svg width={layout.width} height={layout.height} aria-hidden="true">{layout.nodes.map(node => {

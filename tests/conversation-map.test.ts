@@ -68,6 +68,8 @@ test('map search checks full current text and includes a branch quote only on it
   const tail = store.searchConversationMap(session.id, 'deepneedle');
   expect(tail.map(hit => hit.messageId)).toEqual([root.messageId]);
   expect(tail[0].excerpt).toContain('DeepNeedle终点');
+  expect(tail[0]).toMatchObject({ slotId: source.slot_id, nodeId: source.id });
+  expect(store.searchConversationMap(session.id, '唯一来源')[1]).toMatchObject({ messageId: branch.questionMessageId, quote: true });
   expect(store.searchConversationMap(session.id, '唯一来源').map(hit => hit.messageId)).toEqual([root.messageId, branch.questionMessageId]);
   expect(store.searchConversationMap(session.id, '   ')).toEqual([]);
   store.changeBlock(source.slot_id, source.id, '替换后的正文');

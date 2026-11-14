@@ -374,14 +374,11 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 @media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}
 
 /* Navigation previews pair an optional question with the assistant answer. */
-.message-outline{position:absolute;z-index:12;padding:3px 0 16px 12px;background:linear-gradient(to bottom,var(--paper) 0%,var(--paper) calc(100% - 16px),transparent 100%);font-size:11px;color:var(--neutral-4);pointer-events:auto}
+.message-outline{position:absolute;z-index:12;padding:3px 0 16px 12px;background:linear-gradient(to bottom,var(--paper) 0%,var(--paper) calc(100% - 16px),transparent 100%);font-size:11px;color:color-mix(in srgb,var(--neutral-3) 55%,transparent);pointer-events:auto}
 .message-outline-toggle{display:flex;align-items:center;gap:5px;padding:2px 5px;margin-bottom:2px;color:inherit;font-size:11px;transition:color .15s}
-.message-outline-toggle svg{transition:transform .15s}
-.message-outline.collapsed .message-outline-toggle svg{transform:rotate(-90deg)}
 .message-outline-items{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--neutral-6) transparent;padding-bottom:4px}
-.message-outline-items button{display:block;width:100%;padding:3px 5px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;line-height:1.4;color:var(--neutral-4);border-radius:3px;transition:color .15s,background .15s}
+.message-outline-items button{display:block;width:100%;padding:3px 5px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;line-height:1.4;color:inherit;border-radius:3px;transition:color .15s,background .15s}
 .message-outline-items .outline-subheading{padding-left:14px;font-size:10px}
-.message-outline-items button[aria-current=location]{color:var(--neutral-3)}
 .message-outline-toggle:hover,.message-outline-toggle:focus-visible,.message-outline-items button:hover,.message-outline-items button:focus-visible{color:var(--neutral-1);background:var(--neutral-7)}
 .message-nav-preview{max-height:180px}
 .message-nav-preview .nav-question-preview{font-size:12px;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--neutral-1);margin-bottom:6px}

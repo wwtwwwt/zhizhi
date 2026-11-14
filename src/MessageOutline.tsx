@@ -23,7 +23,7 @@ export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefO
       const area = rail.getBoundingClientRect();
       if (!headings.length || content.offsetHeight < viewport.clientHeight * 1.2 || message.getBoundingClientRect().bottom <= bounds.top) { setOutline(null); return; }
       const current = headings.findLastIndex(heading => heading.element.getBoundingClientRect().top <= bounds.top + 48);
-      setOutline({ headings, left: area.left - parent.left, top: bounds.top - parent.top + 8, width: area.width, height: Math.max(60, Math.min(300, viewport.clientHeight * .45)), active: current });
+      setOutline({ headings, left: area.left - parent.left, top: bounds.top - parent.top, width: area.width, height: Math.max(60, Math.min(300, viewport.clientHeight * .45)), active: current });
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
     const resize = new ResizeObserver(schedule);

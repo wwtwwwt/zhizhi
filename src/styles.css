@@ -374,7 +374,7 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 @media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}
 
 /* Navigation previews pair an optional question with the assistant answer. */
-.message-outline{position:absolute;z-index:12;padding:3px 0 16px 12px;background:linear-gradient(to bottom,var(--paper) 0%,var(--paper) calc(100% - 16px),transparent 100%);font-size:12px;color:var(--neutral-3,#888888);pointer-events:auto}
+.message-outline{position:absolute;z-index:12;padding:11px 0 16px 12px;background:linear-gradient(to bottom,var(--paper) 0%,var(--paper) calc(100% - 16px),transparent 100%);border:0;box-shadow:none;filter:none;font-size:12px;color:var(--neutral-3,#888888);pointer-events:auto}
 .message-outline-heading{display:flex;align-items:center;justify-content:space-between;padding-left:5px;margin-bottom:2px}
 .message-outline-toggle{display:flex;align-items:center;padding:3px 5px;color:inherit;transition:color .15s}
 .message-outline-toggle svg{transition:transform .2s ease}

@@ -374,6 +374,14 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 @media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}
 
 /* Navigation previews pair an optional question with the assistant answer. */
+.message-outline{position:absolute;z-index:12;padding:6px 0 22px 12px;background:linear-gradient(to bottom,var(--paper) 0%,var(--paper) calc(100% - 22px),transparent 100%);font-size:11px;color:var(--neutral-3);pointer-events:auto}
+.message-outline-toggle{display:flex;align-items:center;gap:7px;padding:4px 5px;margin-bottom:5px;color:inherit;font-size:11px}
+.message-outline-toggle svg{transition:transform .15s}
+.message-outline.collapsed .message-outline-toggle svg{transform:rotate(-90deg)}
+.message-outline-items{overflow:auto;scrollbar-width:thin;scrollbar-color:var(--neutral-6) transparent;padding-bottom:8px}
+.message-outline-items button{display:block;width:100%;padding:5px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;line-height:1.5;color:var(--neutral-3);border-radius:3px}
+.message-outline-items .outline-subheading{padding-left:16px;font-size:10px}
+.message-outline-items button:hover,.message-outline-items button[aria-current=location]{color:var(--neutral-1);background:var(--neutral-7)}
 .message-nav-preview{max-height:180px}
 .message-nav-preview .nav-question-preview{font-size:12px;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--neutral-1);margin-bottom:6px}
 .message-nav-preview .nav-answer-preview{font-size:12px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--neutral-2);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;max-height:61.2px;overflow:hidden}

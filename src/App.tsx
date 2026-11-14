@@ -18,6 +18,7 @@ import { SettingsPage } from './SettingsPage';
 import type { SendOptions } from '../shared/models';
 import brandMark from './assets/zhizhi-mark.svg';
 import { Markdown } from './Markdown';
+import { MessageOutline } from './MessageOutline';
 import { StreamingMarkdown, MarkdownBlocks } from './StreamingMarkdown';
 import { canonicalOffset, normalizeFormulaRange, copyMarkdownSelection, selectionMarkdown, syncFormulaSelection } from './selection';
 import { expandMathSelection } from '../shared/markdown';
@@ -184,6 +185,7 @@ function Conversation(props: ConversationProps) {
     </div>}
     {assistantCount >= 3 && <nav className="message-navigation" style={{top:navCenter}} aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onFocus={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><>{navPreview.question && <div className="nav-question-preview">{navPreview.question.slots.length ? navPreview.question.slots.map(s => s.node.selection_text).join(' ') : navPreview.question.content_markdown}</div>}<div className="nav-answer-preview">{(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join('\n\n') : navPreview.message.content_markdown).slice(0,1200)}</div></></div>}
+    <MessageOutline scroll={scroll} messageId={activeMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>
     <Composer key={streamId || 'new'} streamId={streamId} busy={busy} onSend={onSend} compact={depth > 0}/>
   </section>;
 }

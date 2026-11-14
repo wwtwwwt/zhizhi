@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from 'react';
-import { ListTree } from 'lucide-react';
+import { ChevronDown, ListTree } from 'lucide-react';
 
 type Heading = { element: HTMLElement; text: string; level: number };
 type Outline = { headings: Heading[]; left: number; top: number; width: number; height: number; active: number };
@@ -36,11 +36,11 @@ export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefO
   }, [scroll, messageId]);
   if (!outline) return null;
   return <nav className={`message-outline ${collapsed ? 'collapsed' : ''}`} aria-label="当前回答目录" style={{ left: outline.left, top: outline.top, width: outline.width }}>
-    <button className="message-outline-toggle" aria-label="目录" title={collapsed ? '展开目录' : '收起目录'} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}><ListTree size={14}/></button>
-    {!collapsed && <div className="message-outline-items" style={{ maxHeight: outline.height }}>{outline.headings.map((heading, index) => <button key={index} className={heading.level === 3 ? 'outline-subheading' : undefined} aria-current={outline.active === index ? 'location' : undefined} title={heading.text} onClick={() => {
+    <div className="message-outline-heading"><ListTree size={14} aria-hidden="true"/><button className="message-outline-toggle" aria-label={collapsed ? '展开目录' : '收起目录'} title={collapsed ? '展开目录' : '收起目录'} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}><ChevronDown size={14}/></button></div>
+    <div className="message-outline-collapse" inert={collapsed} aria-hidden={collapsed}><div className="message-outline-clip"><div className="message-outline-items" style={{ maxHeight: outline.height }}>{outline.headings.map((heading, index) => <button key={index} className={heading.level === 3 ? 'outline-subheading' : undefined} aria-current={outline.active === index ? 'location' : undefined} title={heading.text} onClick={() => {
       const viewport = scroll.current; if (!viewport) return;
       onNavigate();
       viewport.scrollTo({ top: viewport.scrollTop + heading.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-    }}>{heading.text}</button>)}</div>}
+    }}>{heading.text}</button>)}</div></div></div>
   </nav>;
 }

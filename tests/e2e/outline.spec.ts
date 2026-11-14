@@ -21,9 +21,11 @@ test('answer outline tracks headings, jumps, collapses and hides short messages'
   await expect(outline.getByRole('button', { name: '第二部分', exact: true })).toHaveAttribute('aria-current', 'location');
   const distance = await page.locator('.workspace .message-content h2').last().evaluate(element => element.getBoundingClientRect().top - element.closest('.conversation-scroll')!.getBoundingClientRect().top);
   expect(Math.abs(distance - 12)).toBeLessThan(3);
-  await outline.getByRole('button', { name: '目录', exact: true }).click();
-  await expect(outline.locator('.message-outline-items')).toHaveCount(0);
-  await outline.getByRole('button', { name: '目录', exact: true }).click();
+  await outline.getByRole('button', { name: '收起目录', exact: true }).click();
+  await expect(outline.getByRole('button', { name: '展开目录', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  await expect(outline.getByRole('button', { name: '第二部分', exact: true })).toHaveCount(0);
+  await expect.poll(() => outline.locator('.message-outline-collapse').evaluate(element => element.getBoundingClientRect().height)).toBe(0);
+  await outline.getByRole('button', { name: '展开目录', exact: true }).click();
   await expect(outline.locator('.message-outline-items button')).toHaveCount(3);
   const short = await (await request.post('/api/documents/import', { data: { name: '短回答.md', markdown: '## 标题\n\n短正文。', resources: [] } })).json();
   await page.evaluate(id => localStorage.setItem('lastSession', id), short.id);

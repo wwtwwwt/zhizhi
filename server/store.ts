@@ -11,7 +11,7 @@ import { estimateMessages, modelBudget, type SendOptions, type ModelConfig } fro
 import { withoutImages } from '../shared/documents';
 import { nodeTree, splitMarkdown, validBoundary, validMathSelection } from '../shared/markdown';
 import type { Anchor, ChatMessage, ContentNode, ContextRef, GenerationResult, Session, Settings, Slot, Stream } from '../shared/types';
-import type { ConversationMapData, MapMessage } from '../shared/conversation-map';
+import type { ConversationMapData, MapMessage, MapSearchHit } from '../shared/conversation-map';
 
 // SQLite's row boundary is decoded by repository methods below.
 export type Row = Record<string, any>;
@@ -135,6 +135,27 @@ export class Store {
     const answer = first('assistant');
     return { question: snippet(first('user')), answer: snippet(answer), status: answer?.status || 'empty' };
   }
+  mapMessageText(message: Row) {
+    const text = this.visibleSlots(message.id).map(slot => this.need('content_nodes', slot.active_node_id).selection_text).join('\n\n');
+    return text || nodeTree(message.content_markdown || '').text || attachmentInfo(this, message.id).map(file => file.name).join('、');
+  }
+  searchConversationMap(sessionId: string, query: string): MapSearchHit[] {
+    const data = this.conversationMap(sessionId);
+    const branches = new Map(data.branches.map(branch => [branch.anchor.stream_id, branch]));
+    const seen = new Set<string>(), hits: MapSearchHit[] = [];
+    const needle = query.trim().toLowerCase();
+    if (!needle) return hits;
+    for (const message of data.messages) {
+      const branch = !seen.has(message.streamId) ? branches.get(message.streamId) : undefined;
+      seen.add(message.streamId);
+      const text = [branch?.anchor.selected_text, this.mapMessageText(this.need('messages', message.id))].filter(Boolean).join('\n\n');
+      const index = text.toLowerCase().indexOf(needle);
+      if (index < 0) continue;
+      const start = Math.max(0, index - 45), end = Math.min(text.length, index + needle.length + 100);
+      hits.push({ messageId: message.id, excerpt: `${start ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}` });
+    }
+    return hits;
+  }
   conversationMap(sessionId: string): ConversationMapData {
     this.need('sessions', sessionId);
     const root = this.one("SELECT id FROM streams WHERE session_id=? AND kind='root'", sessionId)!;
@@ -149,8 +170,7 @@ export class Store {
       const messages = this.all("SELECT * FROM messages WHERE stream_id=? AND status!='deleted' ORDER BY ordinal", stream.streamId);
       for (const message of messages) {
         const slots = this.visibleSlots(message.id);
-        const text = slots.map(slot => this.need('content_nodes', slot.active_node_id).selection_text).join('\n\n');
-        result.messages.push({ id: message.id, streamId: stream.streamId, parentId: previous, role: message.role, kind: message.document_name ? 'document' : stream.note && message.ordinal === 0 && message.role === 'user' ? 'note' : message.role === 'assistant' ? 'assistant' : 'user', status: message.status, preview: (text || nodeTree(message.content_markdown || '').text || attachmentInfo(this, message.id).map(file => file.name).join('、')).slice(0, 1200) } as MapMessage);
+        result.messages.push({ id: message.id, streamId: stream.streamId, parentId: previous, role: message.role, kind: message.document_name ? 'document' : stream.note && message.ordinal === 0 && message.role === 'user' ? 'note' : message.role === 'assistant' ? 'assistant' : 'user', status: message.status, preview: this.mapMessageText(message).slice(0, 1200) } as MapMessage);
         previous = message.id;
         for (const slot of slots) {
           const branches = this.all('SELECT * FROM branches WHERE source_node_id=? ORDER BY created_at,id', slot.active_node_id);

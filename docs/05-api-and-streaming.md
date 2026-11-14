@@ -9,6 +9,7 @@
 | GET /health | 本机服务健康状态 |
 | GET／POST /sessions | 获取概览／用可选title新建会话和主流 |
 | GET /sessions/:id/map | 当前可见版本可达的消息树、文本预览和分支路径；见15 |
+| GET /sessions/:id/map/search?q=关键词 | 搜索可见完整正文及分支首节点引用，返回messageId和命中片段；q最多200字符 |
 | PATCH／DELETE /sessions/:id | 更新title／停止相关生成并删除会话 |
 | GET／POST /folders、PATCH／DELETE /folders/:id | 查询／创建／重命名／删除分类，删除分类不删除会话 |
 | POST /folders/:id/move、POST /sessions/:id/move | 文件夹层级／排序与会话归属／排序；详细字段见14 |

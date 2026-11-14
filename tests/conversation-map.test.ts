@@ -57,3 +57,20 @@ test('map uses edited visible content and rejects unreachable navigation paths',
   expect(mapBranchPath(data, session.root_stream_id)).toEqual([]);
   expect(() => mapBranchPath(data, 'missing')).toThrow('分支已发生变化');
 });
+
+test('map search checks full current text and includes a branch quote only on its first message', () => {
+  const session = store.createSession();
+  const root = store.appendQuestion(session.root_stream_id, '问题', randomUUID());
+  finish(root, `唯一来源${'普通内容'.repeat(400)}DeepNeedle终点`);
+  const source = store.stream(root.streamId).messages[1].slots[0].node;
+  const branch = store.createBranch(source.id, 0, 4, '唯一来源', '分支问题', randomUUID()); finish(branch, '普通回复');
+  expect(store.conversationMap(session.id).messages[1].preview).not.toContain('DeepNeedle');
+  const tail = store.searchConversationMap(session.id, 'deepneedle');
+  expect(tail.map(hit => hit.messageId)).toEqual([root.messageId]);
+  expect(tail[0].excerpt).toContain('DeepNeedle终点');
+  expect(store.searchConversationMap(session.id, '唯一来源').map(hit => hit.messageId)).toEqual([root.messageId, branch.questionMessageId]);
+  expect(store.searchConversationMap(session.id, '   ')).toEqual([]);
+  store.changeBlock(source.slot_id, source.id, '替换后的正文');
+  expect(store.searchConversationMap(session.id, 'deepneedle')).toEqual([]);
+  expect(store.searchConversationMap(session.id, '分支问题')).toEqual([]);
+});

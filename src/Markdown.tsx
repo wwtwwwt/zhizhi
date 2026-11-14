@@ -3,6 +3,7 @@ import { nodeTree } from '../shared/markdown';
 import type { Anchor, Ast } from '../shared/types';
 import katex from 'katex';
 import { ImageViewer } from './ImageViewer';
+import { MarkdownHeading } from './MarkdownHeading';
 import { safeImageUrl } from '../shared/documents';
 
 function DocumentImage({url, alt}: {url: string; alt: string}) {
@@ -63,7 +64,7 @@ export function Markdown({ source, anchors = [], onBranch, activeBranchId, onAct
       }
       case 'root': return <Fragment key={key}>{children}</Fragment>;
       case 'paragraph': return <p key={key}>{children}</p>;
-      case 'heading': return createElement(`h${node.depth || 2}`, { key }, children);
+      case 'heading': return <MarkdownHeading key={key} level={node.depth || 2}>{children}</MarkdownHeading>;
       case 'strong': return <strong key={key}>{children}</strong>;
       case 'emphasis': return <em key={key}>{children}</em>;
       case 'delete': return <del key={key}>{children}</del>;

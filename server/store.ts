@@ -17,7 +17,7 @@ export type Row = Record<string, any>;
 export class AppError extends Error { constructor(public status: number, public code: string, message: string) { super(message); } }
 const id = () => randomUUID();
 const now = () => new Date().toISOString();
-export const defaults: Settings = { updateNotifications:true, sidebarBlur:false, replySystem:null, blurBackdrop:false, autoScroll:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
+export const defaults: Settings = { updateNotifications:true, sidebarBlur:false, replySystem:null, blurBackdrop:false, autoScroll:true, showOutline:true, theme: 'system', fakeDelay: 30, nickname: '你', fontSize:15, sendShortcut:'enter', confirmDeletion:true, stackDirection: 'up' };
 export class Store {
   db: DatabaseSync;
   models: ModelRegistry;

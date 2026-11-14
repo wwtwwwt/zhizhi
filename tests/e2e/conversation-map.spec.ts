@@ -1,0 +1,73 @@
+import { expect, test } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
+import type { ConversationMapData } from '../../shared/conversation-map';
+
+test('large maps scroll on both axes while keeping fixed node spacing', async ({ page, request }) => {
+  const session = await (await request.post('/api/sessions', { data: { title: '大地图' } })).json();
+  const data: ConversationMapData = { rootStreamId: session.root_stream_id, messages: [], branches: [] };
+  for (let index = 0; index < 24; index++) data.messages.push({ id: `root-${index}`, streamId: data.rootStreamId, parentId: index ? `root-${index - 1}` : null, role: 'assistant', kind: 'assistant', status: 'complete', preview: '主消息' });
+  for (let index = 0; index < 40; index++) {
+    const streamId = `branch-${index}`;
+    data.branches.push({ anchor: { id: streamId, stream_id: streamId, source_node_id: 'source', start_offset: index, end_offset: index + 1, selected_text: '分支' }, parentMessageId: 'root-0', parentStreamId: data.rootStreamId });
+    data.messages.push({ id: streamId, streamId, parentId: 'root-0', role: 'user', kind: 'note', status: 'complete', preview: '笔记' });
+  }
+  await page.route(`**/api/sessions/${session.id}/map`, route => route.fulfill({ json: data }));
+  await page.goto('/');
+  await page.evaluate(id => localStorage.setItem('lastSession', id), session.id);
+  await page.reload();
+  await page.getByRole('button', { name: '对话地图', exact: true }).click();
+  const viewport = page.locator('.conversation-map-scroll');
+  await expect(viewport.locator('.conversation-map-node')).toHaveCount(64);
+  await viewport.hover();
+  await page.mouse.wheel(180, 180);
+  await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  const canvas = viewport.locator('.conversation-map-canvas');
+  const size = await canvas.boundingBox();
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -120);
+  await page.keyboard.up('Control');
+  expect((await canvas.boundingBox())?.width).toBe(size?.width);
+  expect((await canvas.boundingBox())?.height).toBe(size?.height);
+});
+
+test('map panel opens below topbar, previews dots and navigates root and nested branch messages', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { fakeDelay: 0 } });
+  const imported = await (await request.post('/api/documents/import', { data: { name: '地图验证.md', markdown: `## 导入文档\n\n${'这是主对话的长文档，用于验证地图定位。'.repeat(200)}`, resources: [] } })).json();
+  const root = await (await request.post(`/api/streams/${imported.root_stream_id}/messages`, { data: { text: '主问题', modelId: 'fake', requestId: randomUUID() } })).json();
+  await (await request.get(`/api/generations/${root.generationId}/events`)).text();
+  const rootStream = await (await request.get(`/api/streams/${root.streamId}`)).json();
+  const source = rootStream.messages.at(-1).slots[0].node;
+  const branch = await (await request.post('/api/branches', { data: { sourceNodeId: source.id, start: 0, end: 2, selectedText: source.selection_text.slice(0, 2), question: '地图中的分支问题', modelId: 'fake', requestId: randomUUID() } })).json();
+  await (await request.get(`/api/generations/${branch.generationId}/events`)).text();
+  const branchStream = await (await request.get(`/api/streams/${branch.streamId}`)).json();
+  const branchSource = branchStream.messages.at(-1).slots[0].node;
+  const note = await (await request.post('/api/branches', { data: { sourceNodeId: branchSource.id, start: 0, end: 2, selectedText: branchSource.selection_text.slice(0, 2), question: '深层笔记内容', kind: 'note', requestId: randomUUID() } })).json();
+  const map = await (await request.get(`/api/sessions/${imported.id}/map`)).json() as ConversationMapData;
+  const noteMessage = map.messages.find(message => message.streamId === note.streamId)!;
+  await page.goto('/');
+  await page.evaluate(id => localStorage.setItem('lastSession', id), imported.id);
+  await page.reload();
+  const toggle = page.getByRole('button', { name: '对话地图', exact: true });
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const panel = page.getByRole('region', { name: '对话地图', exact: true });
+  await expect(panel.locator('.conversation-map-node')).toHaveCount(map.messages.length);
+  const geometry = await panel.evaluate(element => ({ top: element.getBoundingClientRect().top, header: document.querySelector('.topbar')!.getBoundingClientRect().bottom }));
+  expect(geometry.top).toBe(geometry.header);
+  const rootNode = panel.locator(`[data-map-message="${map.messages[0].id}"]`);
+  await rootNode.hover();
+  await expect(page.getByRole('tooltip')).toContainText('主对话的长文档');
+  await rootNode.click();
+  await expect.poll(() => page.locator('.workspace .conversation-scroll').evaluate(element => element.scrollTop)).toBe(0);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await panel.locator(`[data-map-message="${noteMessage.id}"]`).click();
+  await expect(page.locator('.branch-dialog')).toHaveCount(2);
+  await expect(page.locator(`.top-layer [data-message="${noteMessage.id}"]`)).toContainText('深层笔记内容');
+  await page.locator('.top-layer').getByRole('button', { name: '主对话', exact: true }).click();
+  await expect(page.locator('.branch-dialog')).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(() => page.locator('#conversation-map-panel').evaluate(element => element.getBoundingClientRect().height)).toBe(0);
+  await expect(page.getByRole('button', { name: /^文档：/ })).toHaveCount(0);
+});

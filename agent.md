@@ -52,6 +52,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
+对话地图见[15](docs/15-conversation-map.md)：顶栏右侧按钮下拉展开，圆点对应消息，主流左侧竖排、分支向右紧凑展开；悬停预览、点击主消息滚动或恢复深层分支窗口路径，祖先也定位来源消息。固定点距、整体居中、溢出双轴滚动，不支持缩放。地图只读取当前可见版本能到达的分支，使用现有数据推导、不新增存储；仅展开时请求，随流／会话刷新更新。
+
 ## 验证基线与限制
 
 2026-11-07：文件夹标题按钮显式清除默认内边距并继承标题字距，确保与最近对话文字左边缘对齐；通过差异检查。

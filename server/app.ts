@@ -77,6 +77,7 @@ export function createApp(store: Store, options: { releaseVersion?: string; pape
   });
   app.get('/api/health', (_req, res) => res.json({ ok: true }));
   app.get('/api/sessions', (_req, res) => res.json(store.sessions()));
+  app.get('/api/sessions/:id/map', (req, res) => res.json(store.conversationMap(idParam(req))));
   app.post('/api/sessions', (req, res) => res.json(store.createSession(z.object({ title: z.string().trim().min(1).max(120).optional() }).parse(req.body).title)));
   app.patch('/api/sessions/:id', (req, res) => { store.need('sessions', idParam(req)); const { title } = z.object({ title: z.string().trim().min(1).max(120) }).parse(req.body); store.run('UPDATE sessions SET title=? WHERE id=?', title, idParam(req)); res.json({ ok: true }); });
   app.delete('/api/sessions/:id', (req, res) => { const sid = idParam(req); store.need('sessions', sid); for (const g of store.all('SELECT g.id FROM generations g JOIN streams s ON s.id=g.stream_id WHERE s.session_id=?', sid)) active.get(g.id)?.abort(); store.tx(() => store.run('DELETE FROM sessions WHERE id=?', sid)); res.json({ ok: true }); });

@@ -11,6 +11,7 @@ import { estimateMessages, modelBudget, type SendOptions, type ModelConfig } fro
 import { withoutImages } from '../shared/documents';
 import { nodeTree, splitMarkdown, validBoundary, validMathSelection } from '../shared/markdown';
 import type { Anchor, ChatMessage, ContentNode, ContextRef, GenerationResult, Session, Settings, Slot, Stream } from '../shared/types';
+import type { ConversationMapData, MapMessage } from '../shared/conversation-map';
 
 // SQLite's row boundary is decoded by repository methods below.
 export type Row = Record<string, any>;
@@ -133,6 +134,34 @@ export class Store {
       : nodeTree(message.content_markdown || '').text.slice(0, 180);
     const answer = first('assistant');
     return { question: snippet(first('user')), answer: snippet(answer), status: answer?.status || 'empty' };
+  }
+  conversationMap(sessionId: string): ConversationMapData {
+    this.need('sessions', sessionId);
+    const root = this.one("SELECT id FROM streams WHERE session_id=? AND kind='root'", sessionId)!;
+    const result: ConversationMapData = { rootStreamId: root.id, messages: [], branches: [] };
+    const pending = [{ streamId: root.id as string, parentId: null as string | null, note: false }];
+    const visited = new Set<string>();
+    for (let index = 0; index < pending.length; index++) {
+      const stream = pending[index];
+      if (visited.has(stream.streamId)) continue;
+      visited.add(stream.streamId);
+      let previous = stream.parentId;
+      const messages = this.all("SELECT * FROM messages WHERE stream_id=? AND status!='deleted' ORDER BY ordinal", stream.streamId);
+      for (const message of messages) {
+        const slots = this.visibleSlots(message.id);
+        const text = slots.map(slot => this.need('content_nodes', slot.active_node_id).selection_text).join('\n\n');
+        result.messages.push({ id: message.id, streamId: stream.streamId, parentId: previous, role: message.role, kind: message.document_name ? 'document' : stream.note && message.ordinal === 0 && message.role === 'user' ? 'note' : message.role === 'assistant' ? 'assistant' : 'user', status: message.status, preview: (text || nodeTree(message.content_markdown || '').text || attachmentInfo(this, message.id).map(file => file.name).join('、')).slice(0, 1200) } as MapMessage);
+        previous = message.id;
+        for (const slot of slots) {
+          const branches = this.all('SELECT * FROM branches WHERE source_node_id=? ORDER BY created_at,id', slot.active_node_id);
+          for (const branch of branches) {
+            result.branches.push({ anchor: branch as Anchor, parentMessageId: message.id, parentStreamId: stream.streamId });
+            pending.push({ streamId: branch.stream_id, parentId: message.id, note: branch.kind === 'note' });
+          }
+        }
+      }
+    }
+    return result;
   }
   stream(streamId: string): Stream {
     const stream = this.need('streams', streamId);

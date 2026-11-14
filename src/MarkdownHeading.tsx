@@ -13,7 +13,7 @@ export function MarkdownHeading({ level, children }: { level: number; children: 
       const style = getComputedStyle(element);
       const context = document.createElement('canvas').getContext('2d');
       if (!last || !context) { delete element.dataset.markerFits; return; }
-      context.font = `${style.fontWeight} ${parseFloat(style.fontSize) * .72}px ${style.fontFamily}`;
+      context.font = `${style.fontWeight} ${parseFloat(style.fontSize) * .82}px ${style.fontFamily}`;
       const width = context.measureText('#'.repeat(level)).width;
       const left = last.right - bounds.left + 8;
       element.dataset.markerFits = String(left + width <= element.clientWidth);

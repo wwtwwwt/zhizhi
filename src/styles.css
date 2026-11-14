@@ -388,7 +388,7 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .message-outline-items button{display:block;width:100%;padding:3px 5px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.4;color:inherit;background:transparent;transition:color .15s}
 .message-outline-items .outline-subheading{padding-left:14px;font-size:11px}
 .markdown [data-heading-marker]{position:relative}
-.markdown [data-heading-marker]::after{content:attr(data-heading-marker);position:absolute;left:var(--heading-marker-left);top:var(--heading-marker-top);line-height:var(--heading-marker-height);font-size:.72em;color:var(--neutral-5,#c4c4c4);font-weight:400;white-space:nowrap;pointer-events:none;user-select:none;opacity:0;transition:opacity .15s}
+.markdown [data-heading-marker]::after{content:attr(data-heading-marker);position:absolute;left:var(--heading-marker-left);top:var(--heading-marker-top);line-height:var(--heading-marker-height);font-size:.82em;color:var(--neutral-5,#c4c4c4);font-weight:400;white-space:nowrap;pointer-events:none;user-select:none;opacity:0;transition:opacity .15s}
 .content-block:hover .markdown [data-marker-fits=true]::after{opacity:1}
 .message-outline-items button[aria-current=location]{color:var(--neutral-2,#474747)}
 .message-outline-toggle:hover,.message-outline-toggle:focus-visible,.message-outline-items button:hover,.message-outline-items button:focus-visible{color:var(--neutral-1,#242424);background:transparent}

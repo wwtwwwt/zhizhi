@@ -1,4 +1,39 @@
 import { expect, test } from '@playwright/test';
+import type { Message, Session } from '../../shared/types';
+
+test('outline fades between answers and disappears for an answer without headings', async ({ page, request }) => {
+  await request.put('/api/settings', { data: { showOutline: true } });
+  const paragraph = '用于验证多条消息之间的目录切换。'.repeat(200);
+  const sessions: Session[] = [];
+  for (const markdown of [`## 前一回答\n\n${paragraph}`, `## 后一回答\n\n${paragraph}`, paragraph]) {
+    sessions.push(await (await request.post('/api/documents/import', { data: { name: '目录过渡.md', markdown, resources: [] } })).json());
+  }
+  const messages: Message[] = [];
+  for (const session of sessions) {
+    const stream = await (await request.get(`/api/streams/${session.root_stream_id}`)).json();
+    messages.push({ ...stream.messages[0], role: 'assistant', ordinal: messages.length });
+  }
+  await page.route(`**/api/streams/${sessions[0].root_stream_id}`, async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...await response.json(), messages } });
+  });
+  await page.goto('/');
+  await page.evaluate(id => localStorage.setItem('lastSession', id), sessions[0].id);
+  await page.reload();
+  const outline = page.getByRole('navigation', { name: '当前回答目录' });
+  await expect(outline).toContainText('前一回答');
+  const jump = async (index: number) => page.locator('.workspace .conversation-scroll').evaluate((element, index) => {
+    const message = element.querySelectorAll<HTMLElement>('[data-message]')[index];
+    element.scrollTo({ top: element.scrollTop + message.getBoundingClientRect().top - element.getBoundingClientRect().top - 8, behavior: 'instant' });
+  }, index);
+  await jump(1);
+  await expect(outline).toContainText('后一回答');
+  await expect.poll(() => outline.evaluate(element => getComputedStyle(element).opacity)).toBe('1');
+  await jump(2);
+  await expect(page.locator('.workspace .message-outline')).toHaveCount(0);
+  await jump(0);
+  await expect(outline).toContainText('前一回答');
+});
 
 test('answer outline tracks headings, jumps, collapses and hides short messages', async ({ page, request }) => {
   await request.put('/api/settings', { data: { showOutline: true, theme: 'light' } });

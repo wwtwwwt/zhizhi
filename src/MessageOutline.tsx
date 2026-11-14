@@ -1,12 +1,33 @@
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { ChevronDown, ListTree } from 'lucide-react';
 
 type Heading = { element: HTMLElement; text: string; level: number };
-type Outline = { headings: Heading[]; left: number; top: number; width: number; height: number; active: number };
+type Outline = { messageId: string; headings: Heading[]; left: number; top: number; width: number; height: number; active: number };
 
 export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefObject<HTMLDivElement | null>; messageId: string | null; onNavigate: () => void }) {
   const [outline, setOutline] = useState<Outline | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [presented, setPresented] = useState<Outline | null>(null);
+  const [visible, setVisible] = useState(false);
+  const latest = useRef(outline);
+  latest.current = outline;
+  const presentedId = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (outline && outline.messageId === presentedId.current) setPresented(outline);
+  }, [outline]);
+  useEffect(() => {
+    let frame = 0, nextFrame = 0;
+    if (outline && outline.messageId === presentedId.current) { setVisible(true); return; }
+    setVisible(false);
+    const show = () => {
+      const next = latest.current;
+      presentedId.current = next?.messageId || null;
+      setPresented(next);
+      if (next) frame = requestAnimationFrame(() => { nextFrame = requestAnimationFrame(() => setVisible(true)); });
+    };
+    const timer = setTimeout(show, presentedId.current && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 180 : 0);
+    return () => { clearTimeout(timer); cancelAnimationFrame(frame); cancelAnimationFrame(nextFrame); };
+  }, [outline?.messageId]);
   useLayoutEffect(() => {
     const viewport = scroll.current;
     const message = viewport?.querySelector<HTMLElement>(`[data-message="${messageId}"]`);
@@ -23,7 +44,7 @@ export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefO
       const area = rail.getBoundingClientRect();
       if (!headings.length || content.offsetHeight < viewport.clientHeight * 1.2 || message.getBoundingClientRect().bottom <= bounds.top) { setOutline(null); return; }
       const current = headings.findLastIndex(heading => heading.element.getBoundingClientRect().top <= bounds.top + 48);
-      setOutline({ headings, left: area.left - parent.left, top: bounds.top - parent.top, width: area.width, height: Math.max(60, Math.min(300, viewport.clientHeight * .45)), active: current });
+      setOutline({ messageId: messageId!, headings, left: area.left - parent.left, top: bounds.top - parent.top, width: area.width, height: Math.max(60, Math.min(300, viewport.clientHeight * .45)), active: current });
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
     const resize = new ResizeObserver(schedule);
@@ -34,10 +55,10 @@ export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefO
     update();
     return () => { resize.disconnect(); mutation.disconnect(); viewport.removeEventListener('scroll', schedule); cancelAnimationFrame(frame); };
   }, [scroll, messageId]);
-  if (!outline) return null;
-  return <nav className={`message-outline ${collapsed ? 'collapsed' : ''}`} aria-label="当前回答目录" style={{ left: outline.left, top: outline.top, width: outline.width }}>
+  if (!presented) return null;
+  return <nav className={`message-outline ${collapsed ? 'collapsed' : ''} ${visible ? 'visible' : ''}`} inert={!visible} aria-hidden={!visible} aria-label="当前回答目录" style={{ left: presented.left, top: presented.top, width: presented.width }}>
     <div className="message-outline-heading"><ListTree size={14} aria-hidden="true"/><button className="message-outline-toggle" aria-label={collapsed ? '展开目录' : '收起目录'} title={collapsed ? '展开目录' : '收起目录'} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}><ChevronDown size={14}/></button></div>
-    <div className="message-outline-collapse" inert={collapsed} aria-hidden={collapsed}><div className="message-outline-clip"><div className="message-outline-items" style={{ maxHeight: outline.height }}>{outline.headings.map((heading, index) => <button key={index} className={heading.level === 3 ? 'outline-subheading' : undefined} aria-current={outline.active === index ? 'location' : undefined} title={heading.text} onClick={() => {
+    <div className="message-outline-collapse" inert={collapsed} aria-hidden={collapsed}><div className="message-outline-clip"><div className="message-outline-items" style={{ maxHeight: presented.height }}>{presented.headings.map((heading, index) => <button key={index} className={heading.level === 3 ? 'outline-subheading' : undefined} aria-current={presented.active === index ? 'location' : undefined} title={heading.text} onClick={() => {
       const viewport = scroll.current; if (!viewport) return;
       onNavigate();
       viewport.scrollTo({ top: viewport.scrollTop + heading.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });

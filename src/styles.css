@@ -310,7 +310,7 @@ html.native-sidebar-blur,html.native-sidebar-blur body{background:transparent}
 /* Native window controls need room even when the sidebar is collapsed. */
 .native-mac-sidebar .sidebar-collapsed .topbar{padding-left:96px}
 .native-mac-sidebar .sidebar-collapsed .sidebar{padding-left:0;padding-right:0}
-html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#ffffff0d);border-right-color:light-dark(#00000012,#ffffff16)}
+html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#ffffff0d);border-right-color:light-dark(#00000012,#ffffff16);isolation:isolate}
 .native-sidebar-blur .sidebar-footer{border-top-color:light-dark(#00000012,#ffffff16)}
 .native-sidebar-blur .sidebar .new-chat{background:light-dark(#ffffff28,#ffffff08);border-color:light-dark(#00000018,#ffffff20);box-shadow:none}
 .native-sidebar-blur .sidebar .new-chat:hover,.native-sidebar-blur .sidebar .session-row:hover,.native-sidebar-blur .sidebar .folder-row:hover,.native-sidebar-blur .sidebar .folder-row:focus-within,.native-sidebar-blur .sidebar .settings-link:hover,.native-sidebar-blur .sidebar .icon-button:hover{background:light-dark(#00000009,#ffffff0e)}
@@ -356,7 +356,9 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff80,#f
 .native-sidebar-blur .sidebar :is(.session-row,.folder-row,.settings-link,.new-chat,.settings-tabs button,.back-link,.icon-button):is(:hover,:focus-within){background:var(--sidebar-hover)}
 .native-sidebar-blur .sidebar :is(.session-row.active,.settings-link.active,.settings-tabs button[aria-selected=true]){background:var(--sidebar-active)}
 .native-sidebar-blur .sidebar :is(.session-row,.folder-row):is(:hover,:focus-within) .session-actions{background:transparent}
-.native-sidebar-blur .sidebar .session-actions{background:transparent;backdrop-filter:blur(12px);border-radius:4px}
+/* Native material already blurs the backdrop. Hover controls must not create
+   short-lived backdrop-filter surfaces inside a transparent Electron window. */
+.native-sidebar-blur .sidebar .session-actions{background:transparent;backdrop-filter:none;border-radius:4px}
 .native-sidebar-blur .sidebar :is(.sidebar-label,.session-link svg,.icon-button){color:var(--neutral-2)}
 @media(prefers-reduced-motion:reduce){.message-navigation button>span{transition:none}}
 

@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { layoutConversationMap, type ConversationMapData, type MapMessage, type MapSearchHit } from '../shared/conversation-map';
 import { useAppState } from './client';
 import { MarkdownBlocks } from './StreamingMarkdown';
+import { useMapSplitResize } from './useMapSplitResize';
 import type { Message, Stream } from '../shared/types';
 
 const kindLabels = { user: '用户', assistant: 'AI', note: '笔记', document: '文档' };
@@ -26,6 +27,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   const contentPreview = useRef<HTMLDivElement>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const viewport = useRef<HTMLDivElement>(null);
+  const splitBody = useRef<HTMLDivElement>(null);
+  const split = useMapSplitResize(splitBody, open && !!selection);
   const layer = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(43);
   useEffect(() => () => clearTimeout(clickTimer.current), []);
@@ -144,7 +147,7 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
     {open && searchHost && createPortal(<div className="map-search-controls"><label className="map-search-field"><Search size={14}/><input type="search" aria-label="搜索对话地图" placeholder="搜索消息和引用内容" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); moveResult(event.shiftKey ? -1 : 1); } if (event.key === 'Escape' && query) { event.preventDefault(); event.stopPropagation(); setQuery(''); } }}/>{query && <button aria-label="清除地图搜索" onClick={() => setQuery('')}><X size={13}/></button>}</label>
       {query.trim() && <><output className="map-search-count" aria-live="polite">{searching ? '搜索中…' : searchError || (searchHits.length ? `${resultIndex + 1} / ${searchHits.length}` : '无结果')}</output><div className="map-search-actions"><button aria-label="上一个搜索结果" disabled={!searchHits.length} onClick={() => moveResult(-1)}><ChevronUp size={15}/></button><button aria-label="下一个搜索结果" disabled={!searchHits.length} onClick={() => moveResult(1)}><ChevronDown size={15}/></button><button aria-label="打开搜索结果" disabled={!currentHit || jumping} onClick={() => { const message = currentHit && points.get(currentHit.messageId); if (message) jump(message, currentHit); }}><ArrowUpRight size={15}/></button></div></>}
     </div>, searchHost)}
-    <div className={`conversation-map-body ${selectedMessage ? 'has-preview' : ''}`}>
+    <div ref={splitBody} className={`conversation-map-body ${selectedMessage ? 'has-preview' : ''} ${split.resizing ? 'resizing' : ''}`} style={{ '--map-split': `${split.ratio * 100}%`, '--map-preview-width': `${split.width * (1 - split.ratio)}px` } as CSSProperties}>
     <div className="conversation-map-clip"><div className="conversation-map-scroll" ref={viewport}>
       {error ? <p className="conversation-map-status" role="alert">{error}</p> : !layout ? <p className="conversation-map-status" role="status">{loading ? '正在读取地图…' : ''}</p> : !layout.nodes.length ? <p className="conversation-map-status">暂无消息</p> : <div className="conversation-map-stage"><div className={`conversation-map-canvas ${query.trim() && !searching && !searchError ? 'searching' : ''}`} style={{ width: layout.width, height: layout.height }}>
         <svg width={layout.width} height={layout.height} aria-hidden="true">{layout.nodes.map(node => {
@@ -158,6 +161,7 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
         }} onDoubleClick={() => jump(node, selection?.id === node.id ? selection.hit : undefined)}><span/></button>)}
       </div></div>}
     </div></div>
+    <div className="map-preview-pane" inert={!selectedMessage} aria-hidden={!selectedMessage}>
     {selectedMessage && <aside className="map-message-detail" aria-label="消息内容预览">
       <header><span>{kindLabels[selectedMessage.kind]}</span><div>
         <button className="icon-button" aria-label="跳转到消息" title="跳转到消息" disabled={jumping} onClick={() => jump(selectedMessage, selection?.hit)}><ArrowUpRight size={15}/></button>
@@ -171,6 +175,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
         {!!messagePreview?.attachments?.length && <div className="map-detail-attachments">{messagePreview.attachments.map(attachment => <span key={attachment.id}>{attachment.name}</span>)}</div>}
       </div>
     </aside>}
+    </div>
+    <div className={`map-split-handle ${split.ready ? 'ready' : ''}`} role="separator" aria-label="调整地图与预览比例" aria-orientation="vertical" aria-valuemin={Math.round(split.minimum * 100)} aria-valuemax={Math.round(split.maximum * 100)} aria-valuenow={Math.round(split.ratio * 100)} tabIndex={selectedMessage ? 0 : -1} aria-hidden={!selectedMessage} onPointerEnter={split.enter} onPointerLeave={split.leave} onPointerDown={split.start} onPointerMove={split.move} onPointerUp={split.stop} onPointerCancel={split.stop} onLostPointerCapture={split.stop} onKeyDown={event => { if (split.keyboard(event.key)) event.preventDefault(); }}/>
     </div>
     </section>
   </div>;

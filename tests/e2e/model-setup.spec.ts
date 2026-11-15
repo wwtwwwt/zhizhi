@@ -1,0 +1,47 @@
+import { test, expect } from '@playwright/test';
+
+test('guided model setup prefills providers, discovers models and saves only on confirmation', async ({ page, request }) => {
+  const name = `引导配置-${Date.now()}`;
+  let discovery: Record<string, unknown> | undefined;
+  await page.route('**/api/models/discover', async route => {
+    discovery = route.request().postDataJSON();
+    await route.fulfill({ json: { models: ['vendor/gpt-6.1-sol'] } });
+  });
+  await page.goto('/settings');
+  await page.getByRole('button', { name: '添加模型', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '配置模型', exact: true });
+  await expect(dialog.getByLabel('显示名称', { exact: true })).toBeHidden();
+  await expect(dialog.getByText('连接服务商', { exact: true })).toBeVisible();
+  await dialog.getByLabel('服务商', { exact: true }).selectOption('本机服务（LM Studio）');
+  await expect(dialog.getByLabel('Base URL', { exact: true })).toHaveValue('http://127.0.0.1:1234/v1');
+  await dialog.getByLabel('服务商', { exact: true }).selectOption('其他兼容服务');
+  await dialog.getByLabel('Base URL', { exact: true }).fill('https://example.org/v1');
+  await dialog.getByLabel('模型 ID', { exact: true }).fill('custom/model');
+  await expect(dialog.locator('.model-options summary')).toContainText('Model');
+  await dialog.getByLabel('服务商', { exact: true }).selectOption('DeepSeek');
+  await expect(dialog.getByLabel('Base URL', { exact: true })).toHaveValue('https://api.deepseek.com');
+  await dialog.getByLabel('API Key', { exact: true }).fill('test-key');
+  await dialog.getByRole('button', { name: '读取模型列表', exact: true }).click();
+  await dialog.getByLabel('选择发现的模型', { exact: true }).selectOption('vendor/gpt-6.1-sol');
+  expect(discovery).toMatchObject({ baseUrl: 'https://api.deepseek.com', apiKey: 'test-key' });
+  await expect(dialog.locator('.model-options summary')).toContainText('GPT-6.1-Sol');
+  await dialog.locator('.model-options summary').click();
+  await expect(dialog.getByLabel('显示名称', { exact: true })).toHaveValue('GPT-6.1-Sol');
+  await dialog.getByLabel('显示名称', { exact: true }).fill(name);
+  await dialog.getByLabel('支持图片输入', { exact: true }).check();
+  await dialog.getByRole('button', { name: '保存模型', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const models = await (await request.get('/api/models')).json();
+  const saved = models.find((model: {name: string}) => model.name === name);
+  expect(saved).toMatchObject({ model: 'vendor/gpt-6.1-sol', baseUrl: 'https://api.deepseek.com', hasApiKey: true, supportsImages: true });
+  await page.getByRole('button', { name: `编辑模型：${name}`, exact: true }).click();
+  await dialog.getByRole('button', { name: '清除密钥', exact: true }).click();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  const unchanged = await (await request.get('/api/models')).json();
+  expect(unchanged.find((model: {id: string}) => model.id === saved.id).hasApiKey).toBe(true);
+  await page.getByRole('button', { name: `复制模型：${name}`, exact: true }).click();
+  await expect(dialog.getByLabel('API Key', { exact: true })).toHaveValue('');
+  await expect(dialog.getByRole('button', { name: '清除密钥', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: '取消', exact: true }).click();
+  await request.delete(`/api/models/${saved.id}`);
+});

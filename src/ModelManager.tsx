@@ -1,24 +1,33 @@
 import { useRef, useState } from 'react';
-import { Plus, Trash2, ChevronLeft, RefreshCw, X, Copy, SlidersHorizontal } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, X, Copy, SlidersHorizontal } from 'lucide-react';
 import { api, loadModels, loadSettings, notify, useAppState } from './client';
 import { defaultParameters, validateParameters, type ModelConfig, type ModelParameter } from '../shared/models';
 import { WindowPanel } from './WindowPanel';
 
 type Row = { key: string; raw: string; enabled: boolean };
+const providers = [
+  { name: 'OpenAI', url: 'https://api.openai.com/v1' },
+  { name: 'DeepSeek', url: 'https://api.deepseek.com' },
+  { name: '硅基流动', url: 'https://api.siliconflow.cn/v1' },
+  { name: '本机服务（LM Studio）', url: 'http://127.0.0.1:1234/v1' },
+  { name: '其他兼容服务', url: '' },
+];
 export function ModelManager() {
   const state = useAppState(); const [editing, setEditing] = useState<ModelConfig | 'new' | null>(null);
   const openCopy = (model: ModelConfig) => setEditing({ ...model, id: '', name: `${model.name} 副本`, hasApiKey: false });
-  return <>{editing && <WindowPanel title="配置模型" onClose={() => setEditing(null)}><ModelEditor key={typeof editing === 'string' ? editing : editing.id || 'copy'} model={editing === 'new' ? undefined : editing} onBack={() => setEditing(null)}/></WindowPanel>}<div className="model-manager-body" inert={!!editing}><div className="model-list-heading"><span>模型</span><button className="secondary-button" onClick={() => setEditing('new')}><Plus size={14}/>添加模型</button></div><div className="model-list">{state.models.map(model => <div className="model-row" key={model.id} title={`模型：${model.name}`}><button onClick={() => setEditing(model)}><strong>{model.name}</strong><span>{model.fixed ? '内置模拟模型' : model.model}</span></button>{!model.fixed && <button className="icon-button" aria-label={`复制模型：${model.name}`} title="复制模型配置" onClick={() => openCopy(model)}><Copy size={14}/></button>}<button className="icon-button" aria-label={`编辑模型：${model.name}`} title="配置模型" onClick={() => setEditing(model)}><SlidersHorizontal size={14}/></button>{!model.fixed && <button className="icon-button" aria-label={`删除模型：${model.name}`} onClick={async () => { if (state.settings?.confirmDeletion !== false && !confirm(`删除模型“${model.name}”？聊天记录会保留。`)) return; try { await api(`/models/${model.id}`, 'DELETE'); await loadModels(); await loadSettings(); } catch (e) { notify((e as Error).message); } }}><Trash2 size={14}/></button>}</div>)}</div></div></>;
+  return <>{editing && <WindowPanel title="配置模型" onClose={() => setEditing(null)}><ModelEditor key={typeof editing === 'string' ? editing : editing.id || 'copy'} model={editing === 'new' ? undefined : editing} onBack={() => setEditing(null)}/></WindowPanel>}<div className="model-manager-body" inert={!!editing}><div className="model-list-heading"><div><span>我的模型</span><p className="model-field-hint">连接你使用的 AI 服务，在对话中随时切换模型。</p></div><button className={state.models.some(model => !model.fixed) ? "secondary-button" : "primary-button"} onClick={() => setEditing('new')}><Plus size={14}/>添加模型</button></div>{!state.models.some(model => !model.fixed) && <div className="model-setup-empty"><strong>添加第一个模型</strong><p>准备好服务商的 API Key，选择模型后即可开始对话。本机服务也可以连接。</p></div>}{[false,true].map(fixed => <section className={fixed ? 'model-demo-section' : ''} key={String(fixed)}>{fixed && <h3>体验模式</h3>}<div className="model-list">{state.models.filter(model => !!model.fixed === fixed).map(model => <div className="model-row" key={model.id} title={`模型：${model.name}`}><button onClick={() => setEditing(model)}><strong>{model.name}</strong><span>{model.fixed ? '无需密钥，用于体验界面' : model.model}</span></button>{!model.fixed && <button className="icon-button" aria-label={`复制模型：${model.name}`} title="复制模型配置" onClick={() => openCopy(model)}><Copy size={14}/></button>}<button className="icon-button" aria-label={`编辑模型：${model.name}`} title="配置模型" onClick={() => setEditing(model)}><SlidersHorizontal size={14}/></button>{!model.fixed && <button className="icon-button" aria-label={`删除模型：${model.name}`} onClick={async () => { if (state.settings?.confirmDeletion !== false && !confirm(`删除模型“${model.name}”？聊天记录会保留。`)) return; try { await api(`/models/${model.id}`, 'DELETE'); await loadModels(); await loadSettings(); } catch (e) { notify((e as Error).message); } }}><Trash2 size={14}/></button>}</div>)}</div></section>)}</div></>;
 
 }
 function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => void }) {
   const parameters = model?.parameters || defaultParameters();
   const [name,setName] = useState(model?.name || ''), [baseUrl,setBaseUrl] = useState(model?.baseUrl || 'https://api.openai.com/v1');
+  const [provider,setProvider] = useState(() => providers.find(p => p.url === (model?.baseUrl || 'https://api.openai.com/v1'))?.name || '其他兼容服务');
   const [key,setKey] = useState(''), [clearKey,setClearKey] = useState(false), [modelId,setModelId] = useState(model?.model || ''), [vision,setVision] = useState(model?.supportsImages || false);
   const [contextLength,setContextLength] = useState(String(parameters.find(p=>p.key==='context_length' && p.enabled)?.value || 128000));
   const [rows,setRows] = useState<Row[]>(parameters.filter(p=>p.key!=='context_length').map(p => ({ key:p.key,raw:typeof p.value === 'string' ? p.value : JSON.stringify(p.value),enabled:p.enabled })));
   const [discovered,setDiscovered] = useState<string[]>([]), [showModels,setShowModels] = useState(false), [fetching,setFetching] = useState(false), [delay,setDelay] = useState(model?.fakeDelay || 0),[saving,setSaving]=useState(false),[error,setError]=useState('');
   const discoveryRequest = useRef(0);
+  const options = useRef<HTMLDetailsElement>(null);
   const hasKey=!!model?.hasApiKey;
   const shortName = (id:string) => { const value = id.trim().split('/').at(-1) || id.trim(); return value.split('-').map((part, index) => index === 0 && /^gpt$/i.test(part) ? 'GPT' : /^[a-z]/i.test(part) ? part[0].toUpperCase() + part.slice(1) : part).join('-'); };
   const changeModel = (id:string) => { setModelId(id); if (!name.trim() || name === shortName(modelId)) setName(shortName(id)); };
@@ -44,7 +53,7 @@ function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => voi
   const payload=model?.fixed?{fakeDelay:delay}:{name:name.trim(),baseUrl,apiKey:key,clearApiKey:clearKey,model:modelId.trim(),supportsImages:vision,parameters:currentParameters};
   const save=async()=>{
     if(saving)return;
-    if(invalid){setError(invalid);return;}
+    if(invalid){if(options.current)options.current.open=true;setError(invalid);return;}
     setSaving(true);setError('');
     try{
       if(model?.fixed)await api('/models/fake','PUT',payload);
@@ -52,15 +61,23 @@ function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => voi
       await loadModels();await loadSettings();onBack();
     }catch(e){setError((e as Error).message);}finally{setSaving(false);}
   };
-  return <form className="model-editor model-config-form" onSubmit={e=>{e.preventDefault();void save();}}>
-    <div className="model-editor-heading"><button type="button" className="back-link" disabled={saving} onClick={onBack}><ChevronLeft size={14}/>模型列表</button><h2>{model?.fixed ? '模拟模式' : model ? '编辑模型' : '添加模型'}</h2></div>
+  return <form className="model-editor model-config-form" noValidate onSubmit={e=>{e.preventDefault();void save();}}>
+    <div className="model-editor-heading"><h2>{model?.fixed ? '模拟模式' : model ? '编辑模型' : '添加模型'}</h2></div>
+    {!model?.fixed && <p className="model-form-intro">选择服务商，填入密钥，再选择你要使用的模型。</p>}
     <fieldset className="config-fields" disabled={saving}>{model?.fixed ? <label className="setting-row"><span className="setting-label">输出间隔</span><span className="setting-range"><input aria-label="模拟输出间隔" type="range" min="0" max="100" step="5" value={delay} onChange={e=>setDelay(Number(e.target.value))}/><span>{delay} ms</span></span></label> : <>
-      <label className="setting-row"><span className="setting-label">Base URL</span><input aria-label="Base URL" type="url" required value={baseUrl} onChange={e=>{setBaseUrl(e.target.value);resetDiscovery();}}/></label>
-      <div className="setting-row"><label className="setting-label" htmlFor="model-api-key">API Key</label><div className="model-input-action"><input id="model-api-key" aria-label="API Key" type="password" autoComplete="off" value={key} onChange={e=>{setKey(e.target.value);setClearKey(false);resetDiscovery();}} placeholder={hasKey && !clearKey ? '已配置；留空保持' : '输入 API Key'}/><button type="button" className="icon-button" aria-label="清除密钥" title="清除密钥" disabled={!key && (!hasKey || clearKey)} onClick={()=>{setKey('');setClearKey(true);resetDiscovery();}}><X size={14}/></button></div></div>
+      <h3 className="model-section-heading">连接服务商</h3>
+      <label className="setting-row"><span className="setting-label">服务商</span><select aria-label="服务商" value={provider} onChange={e=>{const selected=providers.find(p=>p.name===e.target.value)!;setProvider(selected.name);setBaseUrl(selected.url);resetDiscovery();}}>{providers.map(p=><option key={p.name}>{p.name}</option>)}</select></label>
+      <label className="setting-row"><span className="setting-label">API 地址</span><input aria-label="Base URL" type="url" required value={baseUrl} placeholder="https://你的服务商/v1" onChange={e=>{setBaseUrl(e.target.value);setProvider(providers.find(p=>p.url===e.target.value)?.name || '其他兼容服务');resetDiscovery();}}/></label>
+      <div className="setting-row"><label className="setting-label" htmlFor="model-api-key">API Key</label><div className="model-input-action"><input id="model-api-key" aria-label="API Key" type="password" autoComplete="off" value={key} onChange={e=>{setKey(e.target.value);setClearKey(false);resetDiscovery();}} placeholder={hasKey && !clearKey ? '已配置；留空保持' : provider === '本机服务（LM Studio）' ? '本机服务通常可留空' : '粘贴服务商提供的密钥'}/><button type="button" className="icon-button" aria-label="清除密钥" title="清除密钥" disabled={!key && (!hasKey || clearKey)} onClick={()=>{setKey('');setClearKey(true);resetDiscovery();}}><X size={14}/></button></div></div>
+      <h3 className="model-section-heading">选择模型</h3>
+      <p className="model-field-hint">点击右侧按钮读取列表，也可以直接填写模型 ID。</p>
       <div className="setting-row"><label className="setting-label" htmlFor="model-id">模型 ID</label><div className="model-id-controls"><div className="model-input-action"><input id="model-id" aria-label="模型 ID" required value={modelId} onChange={e=>changeModel(e.target.value)} placeholder="输入或选择模型 ID"/><button type="button" className="icon-button" aria-label="读取模型列表" title="读取模型列表" aria-expanded={showModels} disabled={fetching || !baseUrl} onClick={()=>void readModels()}><RefreshCw size={14} className={fetching?'model-discovery-loading':''}/></button></div>{showModels && <select autoFocus aria-label="选择发现的模型" value="" onChange={e=>{changeModel(e.target.value);setShowModels(false);}}><option value="" disabled>选择模型</option>{discovered.map(id=><option key={id} value={id}>{id}</option>)}</select>}</div></div>
-      <label className="setting-row"><span className="setting-label">显示名称</span><input aria-label="显示名称" required value={name} onChange={e=>setName(e.target.value)}/></label>
-      <label className="setting-row"><span className="setting-label">上下文长度</span><span className="model-context-input"><input aria-label="上下文长度" type="number" min="256" max="10000000" step="1" required value={contextLength} onChange={e=>setContextLength(e.target.value)}/><span>token</span></span></label>
-      <label className="setting-row"><span className="setting-label">支持图片输入</span><input className="setting-toggle" type="checkbox" checked={vision} onChange={e=>setVision(e.target.checked)}/></label>
+      <details ref={options} className="model-options"><summary>模型选项<span>{name || '名称、上下文长度和图片输入'}</span></summary>
+      <label className="setting-row"><span className="setting-label">显示名称</span><input aria-label="显示名称" value={name} onChange={e=>setName(e.target.value)}/></label>
+      <label className="setting-row"><span className="setting-label">上下文长度</span><span className="model-context-input"><input aria-label="上下文长度" type="number" min="256" max="10000000" step="1" value={contextLength} onChange={e=>setContextLength(e.target.value)}/><span>token</span></span></label>
+      <p className="model-field-hint">默认 128000 token，请按模型实际容量调整，用于估算对话长度。</p>
+      <label className="setting-row"><span className="setting-label">支持图片输入</span><input className="setting-toggle" aria-label="支持图片输入" type="checkbox" checked={vision} onChange={e=>setVision(e.target.checked)}/></label>
+      </details>
       <details className="model-advanced"><summary>高级设置</summary><table className="parameter-table"><thead><tr><th>启用</th><th>参数</th><th>值</th><th/></tr></thead><tbody>{rows.map((r,i)=><tr key={i}><td><input type="checkbox" aria-label={`启用参数 ${i+1}`} checked={r.enabled} onChange={e=>setRows(rows.map((row,j)=>j===i?{...row,enabled:e.target.checked}:row))}/></td><td><input aria-label={`参数名 ${i+1}`} value={r.key} onChange={e=>setRows(rows.map((row,j)=>j===i?{...row,key:e.target.value}:row))}/></td><td><input aria-label={`参数值 ${i+1}`} value={r.raw} onChange={e=>setRows(rows.map((row,j)=>j===i?{...row,raw:e.target.value}:row))}/></td><td><button type="button" className="icon-button" aria-label={`删除参数 ${i+1}`} onClick={()=>setRows(rows.filter((_,j)=>i!==j))}><Trash2 size={13}/></button></td></tr>)}</tbody></table><button type="button" className="secondary-button" onClick={()=>setRows([...rows,{key:'',raw:'',enabled:true}])}><Plus size={13}/>添加参数</button><p className="parameter-hint">仅启用的参数发送给模型。</p></details>
     </>}
     </fieldset>{error&&<p className="config-error" role="alert">{error}</p>}

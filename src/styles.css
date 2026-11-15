@@ -210,6 +210,8 @@ body,.workspace,.branch-dialog,.branch-header,.manage-dialog,.block-menu,.select
 :root[data-theme=dark] .markdown mark.note-anchor,:root[data-theme=dark] .formula-atom.note-anchor,:root[data-theme=dark] .branch-preview.note-preview:hover,:root[data-theme=dark] .branch-preview.note-preview.active{background:#514426;border-color:#9b8141}
 :root[data-theme=dark] .markdown mark.note-anchor:hover,:root[data-theme=dark] .markdown mark.note-anchor[data-active=true],:root[data-theme=dark] .formula-atom.note-anchor[data-active=true]{background:#685731;border-color:#b79b52}
 :root[data-theme=dark] .note-preview .preview-question{color:#dac086}
+:root[data-theme=dark] ::selection{background:#405577;color:#f0f0f0}
+:root[data-theme=dark] .formula-atom::selection{background:#405577;color:#f0f0f0}
 :root[data-theme=dark] .formula-atom[data-selected]{background:#405577!important;box-shadow:0 0 0 1px #6c8dbb}
 :root[data-theme=dark] .danger-button{background:#482b2b;color:#ffaaa2;border-color:#75433f}
 :root[data-theme=dark] .danger-button:hover{background:#60332f}
@@ -444,7 +446,7 @@ html.native-sidebar-blur[data-theme] .sidebar{background:light-dark(#ffffff66,#f
 .conversation-scroll .end-space{height:30px}
 .conversation-map-status{font-size:12px;color:var(--neutral-3,#888888);margin:20px}
 @media(prefers-reduced-motion:reduce){.conversation-map-layer,.conversation-map-panel,.conversation-map-backdrop{transition:none}}
-.message-outline{position:absolute;z-index:12;padding:11px 0 16px 12px;background:linear-gradient(to bottom,var(--reading-surface) 0%,var(--reading-surface) calc(100% - 16px),transparent 100%);border:0;box-shadow:none;filter:none;font-size:12px;color:var(--neutral-3,#888888);pointer-events:auto}
+.message-outline{position:absolute;z-index:12;padding:11px 0 16px 12px;background:var(--reading-surface);mask-image:linear-gradient(to bottom,#000 calc(100% - 16px),transparent);border:0;box-shadow:none;filter:none;font-size:12px;color:var(--neutral-3,#888888);pointer-events:auto}
 .message-outline-heading{display:flex;align-items:center;justify-content:space-between;padding-left:5px;margin-bottom:2px}
 .message-outline{opacity:0;transition:opacity .18s ease;pointer-events:none}
 .message-outline.visible{opacity:1;pointer-events:auto}

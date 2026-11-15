@@ -53,8 +53,20 @@ test('answer outline tracks headings, jumps, collapses and hides short messages'
   const outline = page.getByRole('navigation', { name: '当前回答目录' });
   await expect(outline).toBeVisible();
   await expect(outline.locator('.message-outline-items button')).toHaveCount(3);
-  const surface = await outline.evaluate(element => ({ background: getComputedStyle(element).backgroundImage, page: getComputedStyle(element.closest('.workspace')!).backgroundColor }));
+  const surface = await outline.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, page: getComputedStyle(element.closest('.workspace')!).backgroundColor }));
   expect(surface.background).toContain(surface.page);
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  const dark = await outline.evaluate(element => {
+    const style = getComputedStyle(element), selection = getComputedStyle(document.querySelector('.message-content p')!, '::selection');
+    return { background: style.backgroundColor, page: getComputedStyle(element.closest('.workspace')!).backgroundColor, image: style.backgroundImage, mask: style.maskImage, shadow: style.boxShadow, selection: selection.backgroundColor, text: selection.color };
+  });
+  expect(dark.background).toBe(dark.page);
+  expect(dark.image).toBe('none');
+  expect(dark.mask).toContain('linear-gradient');
+  expect(dark.shadow).toBe('none');
+  expect(dark.selection).toBe('rgb(64, 85, 119)');
+  expect(dark.text).toBe('rgb(240, 240, 240)');
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   const heading = page.locator('.workspace .message-content h2').first();
   await heading.hover();
   await expect(heading).toHaveAttribute('data-marker-fits', 'true');

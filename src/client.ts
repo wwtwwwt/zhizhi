@@ -1,3 +1,4 @@
+import type { SearchSettings, SearchProgress } from '../shared/search';
 import type { UpdateStatus } from '../shared/updates';
 import { useSyncExternalStore } from 'react';
 import { restoreQuestion, type RestoredQuestion } from './composer-drafts';
@@ -5,8 +6,8 @@ import { readSSE } from '../shared/sse';
 import type { ModelConfig } from '../shared/models';
 import type { GenerationResult, Session, Settings, Stream } from '../shared/types';
 
-type Job = { id: string; streamId: string; messageId?: string; nodeId?: string; kind: 'reply' | 'rewrite'; stopping?: boolean; text: string; reasoning: string; reasoningStartedAt?: number; reasoningEndedAt?: number };
-type State = { updates?: UpdateStatus; checkingUpdates?: boolean; models: ModelConfig[]; sessions: Session[]; streams: Record<string, Stream>; settings: Settings | null; jobs: Record<string, Job>; toast: string; toastAction?: { label: string; run: () => Promise<void> } };
+type Job = { search?: SearchProgress; id: string; streamId: string; messageId?: string; nodeId?: string; kind: 'reply' | 'rewrite'; stopping?: boolean; text: string; reasoning: string; reasoningStartedAt?: number; reasoningEndedAt?: number };
+type State = { searchSettings?: SearchSettings; updates?: UpdateStatus; checkingUpdates?: boolean; models: ModelConfig[]; sessions: Session[]; streams: Record<string, Stream>; settings: Settings | null; jobs: Record<string, Job>; toast: string; toastAction?: { label: string; run: () => Promise<void> } };
 let state: State = { models: [], sessions: [], streams: {}, settings: null, jobs: {}, toast: '' };
 const deletedStreams = new Set<string>();
 const listeners = new Set<() => void>();
@@ -28,6 +29,7 @@ export async function api<T = { ok: boolean }>(path: string, method = 'GET', bod
 export async function refreshSessions() { const sessions = await api<Session[]>('/sessions'); patch({ sessions }); return sessions; }
 export async function loadStream(id: string) { const stream = await api<Stream>(`/streams/${id}`); if (deletedStreams.has(id)) throw new Error('分支已删除'); patch({ streams: { ...state.streams, [id]: stream } }); return stream; }
 export async function loadSettings() { const settings = await api<Settings>('/settings'); patch({ settings }); return settings; }
+export async function loadSearchSettings() { const searchSettings = await api<SearchSettings>('/search-settings'); patch({ searchSettings }); return searchSettings; }
 export async function loadModels() { const models = await api<ModelConfig[]>('/models'); patch({ models }); return models; }
 export async function runGeneration(result: GenerationResult, kind: 'reply' | 'rewrite', nodeId?: string) {
   const gid = result.generationId;
@@ -44,6 +46,7 @@ export async function runGeneration(result: GenerationResult, kind: 'reply' | 'r
     let complete = false;
     for await (const event of readSSE(response.body)) {
       const data = JSON.parse(event.data);
+      if (event.event === 'search-progress') { const job = state.jobs[gid]; if (job) patch({ jobs: { ...state.jobs, [gid]: { ...job, search: data } } }); }
       if (event.event === 'delta') { const job = state.jobs[gid]; if (job) patch({ jobs: { ...state.jobs, [gid]: { ...job, text: job.text + data.text, reasoningEndedAt: job.reasoningStartedAt ? job.reasoningEndedAt ?? Date.now() : undefined } } }); }
       if (event.event === 'reasoning') { const job = state.jobs[gid]; if (job) patch({ jobs: { ...state.jobs, [gid]: { ...job, reasoning: job.reasoning + data.text, reasoningStartedAt: job.reasoningStartedAt ?? Date.now(), reasoningEndedAt: undefined } } }); }
       if (event.event === 'complete') complete = true;

@@ -12,7 +12,7 @@ export class ModelRegistry {
     const secrets = this.store.secrets.read();
     const modelKeys = secrets.modelKeys || {};
     if (clear) delete modelKeys[id]; else modelKeys[id] = key!;
-    this.store.secrets.write({modelKeys});
+    this.store.secrets.write({...secrets, modelKeys});
   }
   save(value: Omit<ModelConfig, 'id'> & { id?: string; apiKey?: string; clearApiKey?: boolean }) {
     if (value.id === 'fake' || value.provider === 'fake') throw new AppError(400, 'FIXED_MODEL', '模拟模式是固定模型');

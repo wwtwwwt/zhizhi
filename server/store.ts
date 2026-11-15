@@ -247,9 +247,12 @@ export class Store {
     const previous = answer ? this.one("SELECT id,role FROM messages WHERE stream_id=? AND ordinal<? AND status!='deleted' ORDER BY ordinal DESC LIMIT 1", g.stream_id, answer.ordinal) : undefined;
     return { generationId: g.id, streamId: g.stream_id, messageId: g.target_message_id || undefined, questionMessageId: previous?.role === 'user' ? previous.id : undefined, branch };
   }
-  generation(streamId: string, messageId: string | null, sourceNodeId: string | null, kind: string, messages: ChatMessage[], requestId: string, signature: string, selectedModel?: ModelConfig) {
+  generation(streamId: string, messageId: string | null, sourceNodeId: string | null, kind: string, messages: ChatMessage[], requestId: string, signature: string, selectedModel?: ModelConfig, webSearch: 'off' | 'auto' = 'off') {
     const model = selectedModel || this.models.get();
-    const settings = { modelConfig: model };
+    const enabled = webSearch === 'auto';
+    if (enabled && !this.secrets.read().searchKey) throw new AppError(400, 'SEARCH_CONFIG_REQUIRED', '请先在供应商中配置联网搜索');
+    if (enabled && model.provider === 'fake') throw new AppError(400, 'TOOLS_UNSUPPORTED', '模拟模式不支持联网，请选择真实模型');
+    const settings = { modelConfig: model, webSearch };
     if (model.provider === 'openai' && !this.models.key(model.id) && !['127.0.0.1','localhost','[::1]'].includes(new URL(model.baseUrl).hostname)) throw new AppError(400, 'MODEL_CONFIG_REQUIRED', '请先配置此模型的 API Key');
     if (!model.supportsImages && messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'))) throw new AppError(400, 'IMAGES_UNSUPPORTED', '当前上下文包含图片，请选择支持图片输入的模型');
     const budget = modelBudget(model); if (estimateMessages(messages) + budget.output > budget.limit) throw new AppError(400, 'CONTEXT_TOO_LARGE', '上下文超过所选模型的预算，请减少附件或选择更大上下文的模型');
@@ -260,7 +263,7 @@ export class Store {
     this.touch(streamId); return this.need('generations', gid);
   }
   assertIdle(streamId: string) { if (this.one("SELECT id FROM generations WHERE stream_id=? AND status IN ('queued','streaming')", streamId)) throw new AppError(409, 'BUSY', '这段对话正在生成，请稍后再试'); }
-  sendSignature(options: SendOptions) { return { modelId: options.modelId, attachments: options.attachments?.map(a => ({ name: a.name, kind: a.kind, mime: a.mime, digest: createHash('sha256').update(a.data).digest('hex') })) || [] }; }
+  sendSignature(options: SendOptions) { return { webSearch: options.webSearch || 'off', modelId: options.modelId, attachments: options.attachments?.map(a => ({ name: a.name, kind: a.kind, mime: a.mime, digest: createHash('sha256').update(a.data).digest('hex') })) || [] }; }
   appendQuestion(streamId: string, text: string, requestId: string, options: SendOptions = {}): GenerationResult {
     const signature = JSON.stringify(['message', streamId, text, this.sendSignature(options)]); const old = this.replay(requestId, signature); if (old) return this.result(old);
     return this.tx(() => this.appendInside(streamId, text, requestId, signature, options));
@@ -273,7 +276,7 @@ export class Store {
     this.run("INSERT INTO messages(id,stream_id,ordinal,role,status) VALUES(?,?,?,'assistant','queued')", assistant, streamId, next + 1);
     const stream = this.need('streams', streamId);
     if (stream.kind === 'root' && next === 0) this.run("UPDATE sessions SET title=? WHERE id=? AND title='新的对话'", text.slice(0, 32), stream.session_id);
-    return this.result(this.generation(streamId, assistant, null, stream.kind === 'root' ? 'reply' : 'branch', this.context(streamId), requestId, signature, this.models.get(options.modelId)));
+    return this.result(this.generation(streamId, assistant, null, stream.kind === 'root' ? 'reply' : 'branch', this.context(streamId), requestId, signature, this.models.get(options.modelId), options.webSearch));
   }
   createBranch(sourceNodeId: string, start: number, end: number, selectedText: string, question: string, requestId: string): GenerationResult;
   createBranch(sourceNodeId: string, start: number, end: number, selectedText: string, question: string, requestId: string, kind: 'question' | 'note', options?: SendOptions): GenerationResult | { streamId: string; branch: Anchor };
@@ -379,8 +382,8 @@ export class Store {
     for (const resource of this.all('SELECT id FROM document_resources'))
       if (!markdown.some(text=>text.includes(`/api/document-resources/${resource.id}`))) this.run('DELETE FROM document_resources WHERE id=?',resource.id);
   }
-  rewrite(nodeId: string, requestId: string, modelId?: string): GenerationResult {
-    const signature = JSON.stringify(['rewrite', nodeId, modelId]); const old = this.replay(requestId, signature); if (old) return this.result(old);
+  rewrite(nodeId: string, requestId: string, modelId?: string, webSearch: 'off' | 'auto' = 'off'): GenerationResult {
+    const signature = JSON.stringify(['rewrite', nodeId, modelId, webSearch]); const old = this.replay(requestId, signature); if (old) return this.result(old);
     return this.tx(() => {
       const node = this.need('content_nodes', nodeId), slot = this.need('block_slots', node.slot_id), message = this.need('messages', slot.message_id);
       this.assertVisible(slot);
@@ -401,7 +404,7 @@ export class Store {
         }
       }
       const context = rewriteContext(this.resolve(this.refs(message.stream_id, nodeId)), withoutImages(node.markdown), parts.join('\n\n'));
-      return this.result(this.generation(message.stream_id, null, nodeId, 'rewrite', context, requestId, signature, this.models.get(modelId)));
+      return this.result(this.generation(message.stream_id, null, nodeId, 'rewrite', context, requestId, signature, this.models.get(modelId), webSearch));
     });
   }
   finish(gid: string, markdown: string): Record<string, string> {

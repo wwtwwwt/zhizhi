@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, RefreshCw, X, Copy, SlidersHorizontal, ChevronLeft, Check, ArrowRight } from 'lucide-react';
 import { api, loadModels, loadSettings, notify, useAppState } from './client';
 import { apiLabels, defaultParameters, validateParameters, type ApiType, type ModelConfig, type ModelImportSource, type ModelParameter } from '../shared/models';
+import { SearchSettings } from './SearchSettings';
 import { WindowPanel } from './WindowPanel';
 
 type Row = { key: string; raw: string; enabled: boolean };
@@ -33,6 +34,7 @@ export function ModelManager() {
           try { await api(`/models/${model.id}`, 'DELETE'); await loadModels(); await loadSettings(); } catch (e) { notify((e as Error).message); }
         }}><Trash2 size={14}/></button>}
       </div>)}</div>
+      <SearchSettings/>
     </div>
   </>;
 }

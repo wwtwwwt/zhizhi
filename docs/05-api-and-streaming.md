@@ -15,7 +15,7 @@
 | POST /folders/:id/move、POST /sessions/:id/move | 文件夹层级／排序与会话归属／排序；详细字段见14 |
 | GET /streams/:id | 消息、块、当前节点、可用版本、anchors、source、待完成重构 |
 | GET /streams/:id/context | 估算已用预算，可选sourceNodeId截取祖先前缀 |
-| POST /streams/:id/messages | text、requestId、可选modelId／attachments，保存问题与回复任务 |
+| POST /streams/:id/messages | text、requestId、可选modelId／attachments／webSearch（off或auto，默认off），保存问题与回复任务 |
 | POST /messages/:id/reedit | 原子删除最新问答及相关分支并返回text、attachments、streamIds、parentStreamId；流须空闲。空AI移除后也接受最新user的ID以恢复原问题；拒绝过期恢复 |
 | DELETE /messages/:id | 删除整条消息及相关分支，返回streamIds、parentStreamId |
 | POST /branches | sourceNodeId、start、end、selectedText、requestId、kind及正文，原子创建分支 |
@@ -24,7 +24,7 @@
 | POST /slots/:id/after | markdown、expectedActiveNodeId，在下方插入独立块 |
 | DELETE /slots/:id | expectedActiveNodeId、必填scope（all／current），返回被删streamIds |
 | PATCH /slots/:id/active-version | nodeId、expectedActiveNodeId，切版后返回ok；客户端重载流 |
-| POST /nodes/:id/rewrites | requestId、可选modelId（界面传目标流输入框所选模型），捕获后代上下文并创建重构任务 |
+| POST /nodes/:id/rewrites | requestId、可选modelId／webSearch（界面传目标流输入框所选模型及模式），捕获后代上下文并创建重构任务 |
 | POST /rewrite-proposals/:id/accept | expectedActiveNodeId，采用候选 |
 | POST /rewrite-proposals/:id/reject | 保留原文，拒绝候选 |
 | GET /generations/:id/events | 启动queued任务并订阅SSE，单任务只执行一次 |
@@ -32,6 +32,7 @@
 | GET /updates | 当前构建版本、上次检查、已知Release、available及错误；不请求外部网络 |
 | POST /updates/check | manual布尔值默认false；开发构建不检查，自动检查受偏好与12小时间隔限制，手动可绕过 |
 | GET／PUT /settings | 获取／部分更新通用偏好、fakeDelay |
+| GET／PUT /search-settings | 获取provider／configured；更新apiKey或clear，不返回密钥、不触发外部检测 |
 | GET／POST /models | 获取模型列表／添加模型 |
 | PUT／DELETE /models/:id | 更新／删除模型，包含apiType、可选authType、图片能力和参数；fake只允许更新fakeDelay且不可删除 |
 | 模型切换 | 在输入框模型菜单中选择并保存上次选择到浏览器 localStorage |
@@ -58,6 +59,7 @@
 | start | generationId、kind |
 | reasoning | text，服务商公开输出的思考摘要增量 |
 | delta | text，正文增量 |
+| search-progress | activities（工具、输入、状态、可选错误）、sources（编号、标题、URL）；仅当前生成，不落库 |
 | complete | generationId、messageId；重构为proposalId、candidateNodeId |
 | error | code、message |
 
@@ -75,7 +77,7 @@ SSE解析支持跨chunk UTF-8、CRLF、多行data、注释和多个事件；网�
 | Responses | Base URL + /responses，Bearer | response.output_text.delta（含refusal.delta）／reasoning_summary_text.delta | response.completed |
 | Anthropic Messages | Base URL + /v1/messages（已有/v1不重复），x-api-key或Bearer，附anthropic-version | content_block_delta中的text_delta／thinking_delta | message_stop |
 
-Responses使用完整input及store=false，不依赖服务端会话。Messages将system从消息数组分离，图片转换为source。统一事件包含正文、思考、完成及协议metadata，当前生成只保存正文／思考，不执行工具调用。非SSE、错误JSON、错误事件、提前断连均进入错误路径；Responses incomplete按未完成处理，已有正文仍按现有错误流程保存切块。无块终态消息按共用规则清理。等待响应和事件间空闲超时为60秒；用户停止会abort上游，不自动重试或降级模拟模型。带密钥请求拒绝重定向，避免将凭据转发到另一地址。
+Responses使用完整input及store=false，不依赖服务端会话。Messages将system从消息数组分离，图片转换为source。统一事件包含正文、思考、完成及协议metadata，关闭联网时生成只保存正文／思考，不执行工具调用。自动模式改由AI SDK Core执行联网循环，仍复用同一SSE、取消及收尾，见[16](16-agent-search.md)。工具结果和协议附加数据不落库。非SSE、错误JSON、错误事件、提前断连均进入错误路径；Responses incomplete按未完成处理，已有正文仍按现有错误流程保存切块。无块终态消息按共用规则清理。关闭联网时等待响应和事件间空闲超时为60秒；自动模式执行本轮3分钟及工具30秒限制；用户停止会abort上游，不自动重试或降级模拟模型。带密钥请求拒绝重定向，避免将凭据转发到另一地址。
 
 模型列表超时20秒；分页按has_more及游标读取，最多100页，超出时明确报错并允许手动输入，不静默截断。连接／检测请求会在客户端断开时取消。可用性测试上限256 token、总超时60秒，可能计费；仅当Chat服务明确拒绝max_tokens并要求max_completion_tokens时，以后一参数重新检测，返回建议供新模型保存。普通对话不自动进行这种参数重试。导入id只在服务端解析密钥，绑定原地址、协议及认证方式；不随模型配置持久化。
 

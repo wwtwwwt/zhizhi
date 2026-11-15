@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppError, Store } from './store';
+import { streamAgent } from './providers/agent';
 import { streamChat } from './providers/chat';
 import { importDocument, convertPaper } from './documents';
 import fakePrompts from '../prompts/fake.json';
@@ -16,7 +17,7 @@ import { discoverModels, checkModel } from './model-connection';
 const requestId = z.string().uuid();
 const question = z.string().trim().min(1, '请输入问题').max(30_000);
 const idParam = (req: Request) => String(req.params.id);
-export function createApp(store: Store, options: { readModelImports?: () => Promise<ImportCandidate[]>; releaseVersion?: string; paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
+export function createApp(store: Store, options: { searchEndpoint?: string; readModelImports?: () => Promise<ImportCandidate[]>; releaseVersion?: string; paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
   const app = express();
   const updates = new UpdateChecker(store, options.releaseVersion);
   const active = new Map<string, AbortController>();
@@ -54,9 +55,18 @@ export function createApp(store: Store, options: { readModelImports?: () => Prom
     return store.models.save({ ...value, id, apiKey: d.clearApiKey ? undefined : credentials(d), provider: 'openai' });
   };
   const attachmentInput = z.array(z.object({ name: z.string().min(1).max(250), kind: z.enum(['text','image']), mime: z.string().max(100), data: z.string().max(8 * 1024 * 1024) })).max(6).default([]);
-  const sendOptions = { modelId: z.string().max(100).optional(), attachments: attachmentInput };
+  const sendOptions = { webSearch: z.enum(['off','auto']).default('off'), modelId: z.string().max(100).optional(), attachments: attachmentInput };
   app.get('/api/documents/picker', (_req,res) => res.json({available:!!options.pickDocument}));
   app.post('/api/documents/picker', async (_req,res) => res.json(options.pickDocument ? await options.pickDocument() : null));
+  app.get('/api/search-settings', (_req, res) => res.json({ provider: 'deepseek', configured: !!store.secrets.read().searchKey }));
+  app.put('/api/search-settings', (req, res) => {
+    const data = z.object({ apiKey: z.string().trim().max(10000).optional(), clear: z.boolean().optional() }).parse(req.body);
+    const secrets = store.secrets.read();
+    if (data.clear) delete secrets.searchKey;
+    else if (data.apiKey) secrets.searchKey = data.apiKey;
+    store.secrets.write(secrets);
+    res.json({ provider: 'deepseek', configured: !!secrets.searchKey });
+  });
   app.get('/api/models', (_req, res) => res.json(store.models.list()));
   app.post('/api/models', (req, res) => res.json(saveModel(modelInput.parse(req.body))));
   app.put('/api/models/:id', (req, res) => {
@@ -115,7 +125,7 @@ export function createApp(store: Store, options: { readModelImports?: () => Prom
     res.json(store.deleteBranch(idParam(req)));
   });
   app.post('/api/slots/:id/after', (req, res) => { const d = z.object({ markdown: question, expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.addBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
-  app.post('/api/nodes/:id/rewrites', (req, res) => { const data = z.object({ requestId, modelId: z.string().max(100).optional() }).parse(req.body); res.json(store.rewrite(idParam(req), data.requestId, data.modelId)); });
+  app.post('/api/nodes/:id/rewrites', (req, res) => { const data = z.object({ requestId, modelId: z.string().max(100).optional(), webSearch: z.enum(['off','auto']).default('off') }).parse(req.body); res.json(store.rewrite(idParam(req), data.requestId, data.modelId, data.webSearch)); });
   app.patch('/api/slots/:id/active-version', (req, res) => { const d = z.object({ nodeId: z.string().uuid(), expectedActiveNodeId: z.string().uuid() }).parse(req.body); store.switchVersion(idParam(req), d.nodeId, d.expectedActiveNodeId); res.json({ ok: true }); });
   app.patch('/api/slots/:id/content', (req, res) => { const d = z.object({ markdown: z.string().trim().max(30_000), expectedActiveNodeId: z.string().uuid() }).parse(req.body); res.json(store.changeBlock(idParam(req), d.expectedActiveNodeId, d.markdown)); });
   app.post('/api/messages/:id/reedit', (req,res) => res.json(store.reeditQuestion(idParam(req))));
@@ -174,7 +184,11 @@ export function createApp(store: Store, options: { readModelImports?: () => Prom
       const address = req.socket.localAddress?.includes(':') ? '127.0.0.1' : req.socket.localAddress || '127.0.0.1';
       const settings = JSON.parse(g.settings_json);
       const messages = JSON.parse(g.context_json);
-      for await (const text of streamChat({ messages: store.hydrate(messages), settings, apiKey: store.models.key(settings.modelConfig.id), internalToken: options.apiToken, onReasoning: text => { reasoning += text; store.run('UPDATE generations SET reasoning_text=? WHERE id=?', reasoning, gid); if (g.target_message_id) store.run('UPDATE messages SET reasoning_text=? WHERE id=?', reasoning, g.target_message_id); send('reasoning', { text }); }, fakeUrl: `http://${address}:${req.socket.localPort}/api/fake/v1/chat/completions`, kind: g.kind, depth, signal: controller.signal })) {
+      const onReasoning = (text: string) => { reasoning += text; store.run('UPDATE generations SET reasoning_text=? WHERE id=?', reasoning, gid); if (g.target_message_id) store.run('UPDATE messages SET reasoning_text=? WHERE id=?', reasoning, g.target_message_id); send('reasoning', { text }); };
+      const output = settings.webSearch === 'auto'
+        ? streamAgent({ model: settings.modelConfig, apiKey: store.models.key(settings.modelConfig.id), searchKey: store.secrets.read().searchKey || '', messages: store.hydrate(messages), signal: controller.signal, onReasoning, onProgress: progress => send('search-progress', progress), searchEndpoint: options.searchEndpoint })
+        : streamChat({ messages: store.hydrate(messages), settings, apiKey: store.models.key(settings.modelConfig.id), internalToken: options.apiToken, onReasoning, fakeUrl: `http://${address}:${req.socket.localPort}/api/fake/v1/chat/completions`, kind: g.kind, depth, signal: controller.signal });
+      for await (const text of output) {
         if (controller.signal.aborted) break;
         draft += text; send('delta', { text });
         if (Date.now() - savedAt > 250) { store.run('UPDATE generations SET draft_markdown=? WHERE id=?', draft, gid); savedAt = Date.now(); }

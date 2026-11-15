@@ -7,7 +7,7 @@ export type ModelImportSource = { id: string; source: string; baseUrl: string; a
 export const apiLabels: Record<ApiType, string> = { chat: 'Chat Completions', responses: 'Responses', messages: 'Anthropic Messages' };
 export type AttachmentInput = { name: string; kind: 'image' | 'text'; mime: string; data: string };
 export type AttachmentInfo = { id: string; name: string; kind: 'image' | 'text'; mime: string; size: number; text?: string };
-export type SendOptions = { modelId?: string; attachments?: AttachmentInput[] };
+export type SendOptions = { webSearch?: 'off' | 'auto'; modelId?: string; attachments?: AttachmentInput[] };
 export const defaultParameters = (): ModelParameter[] => [
   { key: 'temperature', value: 0.7, enabled: true },
   { key: 'max_tokens', value: 4096, enabled: true },
@@ -35,7 +35,7 @@ export function requestParameters(model: ModelConfig) {
 }
 export function validateParameters(parameters: ModelParameter[]): string | null {
   const keys = new Set<string>();
-  const reserved = new Set(['model','messages','input','system','stream','store','api_key','apiKey','baseUrl','base_url','headers','Authorization','__fake','__proto__','prototype','constructor']);
+  const reserved = new Set(['model','messages','input','system','stream','store','tools','tool_choice','previous_response_id','conversation','api_key','apiKey','baseUrl','base_url','headers','Authorization','__fake','__proto__','prototype','constructor']);
   for (const p of parameters) {
     if (!/^[A-Za-z][\w.]*$/.test(p.key) || reserved.has(p.key)) return '参数名无效或属于保留字段';
     if (keys.has(p.key)) return '参数名不能重复'; keys.add(p.key);

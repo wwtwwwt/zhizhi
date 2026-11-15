@@ -11,6 +11,7 @@
 | `server/prompts.ts` | 替换变量、按角色拼装系统／用户消息 | 是，不包含自然语言模板 |
 | `server/store.ts` | 确定读哪些节点、消息、附件以及何时保存快照 | 是，负责数据范围 |
 | `server/providers/chat.ts`、`protocol.ts` | 将已组装消息转换并发送给Chat Completions／Responses／Messages服务 | 是，不追加隐藏提示词 |
+| `server/providers/agent.ts`、`server/web-search.ts` | 自动模式追加联网系统模板和工具描述，驱动本轮循环 | 是，模板仍以context.json为准 |
 | `server/providers/fake.ts` | 固定正文 fixture | 否，不是真实模型提示词 |
 
 模板不决定读取权限。把“参考所有分支”写进 system 不会让模型获得未组装的数据。若要更改范围，必须同步调整 Store 的读取逻辑、文档和验证。
@@ -136,7 +137,7 @@ JSON 语法使用双引号，换行写 `\n`，LaTeX 反斜杠写 `\\`。普通�
 
 `fake.json.reasoning` 是模拟端点通过 reasoning_content 输出的固定摘要，不发送给真实模型，也不参与后续上下文。固定正文按 reply／branch／rewrite 和深度选择 fixture。模型 reasoning_effort、temperature、max_tokens 等是请求参数，不是自然语言模板；context_length 仅用于本地预算。
 
-InkToMd 是文档转换 API，不存在本项目维护的转换模型提示词。当前没有搜索、agent loop、自动标题生成、知识画像或自动测验的隐藏提示词。
+InkToMd 是文档转换 API，不存在本项目维护的转换模型提示词。联网模板为webSearchSystem、webSearchTool、webReadTool，均在context.json维护：前者仅在自动模式追加到原系统消息之前，说明按需查询、不可信网页和真实来源引用；后两者分别是搜索与分页网页读取的工具描述，无变量。关闭联网不发送这三个模板。没有自动标题生成、知识画像或自动测验的隐藏提示词。
 
 ## 用户个性化覆盖
 

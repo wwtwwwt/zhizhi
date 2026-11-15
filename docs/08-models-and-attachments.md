@@ -42,7 +42,7 @@ apiType及Messages可选authType保存在现有模型config_json和生成快照�
 
 统一上下文仍由枝知组装，`server/providers/protocol.ts`负责请求转换及统一ModelEvent，`chat.ts`复用超时、中断和SSE读取。Responses每轮发送完整input，store=false，不使用previous_response_id或服务端会话；Messages提取system并将图片转换为base64／URL source。Chat保留原messages格式。文本、图片附件、主流、分支及重构共用此转换层。
 
-这轮只支持普通生成，不执行工具调用或Agent循环。ModelEvent保留metadata事件供后续扩展，当前不会将完整协议块／工具调用历史持久化，也不会把思考摘要重放到后续上下文。后续引入Agent时仍需补齐工具记录及协议附加数据的持久化。
+联网关闭时沿用原有普通生成；自动时由AI SDK Core通过三种API适配器执行搜索／读取循环。必要协议附加数据仅在本轮内回传，不持久化工具历史，也不向后续轮次重放思考摘要。模型必须支持工具调用，配置与限制见[16](16-agent-search.md)。
 
 ## 共用输入框
 

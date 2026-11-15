@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-11-15（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-16（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -41,7 +41,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 
 ## 当前实现
 
-React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型支持Chat Completions／Responses／Anthropic Messages，apiType及可选authType存现有模型JSON，未指定apiType时为chat；统一请求／事件转换在server/providers/protocol.ts，共用chat.ts流式生命周期。Responses每次发完整上下文、store=false，不依赖服务端会话；Messages独立system及图片source。默认固定模拟模型，无新表。Agent／工具历史尚未实现，metadata事件仅预留扩展，不声称已持久化完整协议块。
+React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型支持Chat Completions／Responses／Anthropic Messages，apiType及可选authType存现有模型JSON，未指定apiType时为chat；统一请求／事件转换在server/providers/protocol.ts，共用chat.ts流式生命周期。Responses每次发完整上下文、store=false，不依赖服务端会话；Messages独立system及图片source。默认固定模拟模型，无新表。联网自动模式使用AI SDK Core执行DeepSeek Search／Fetch循环，三种API均可用；工具协议、网页及执行记录仅本轮保留，不持久化，无新增表。关闭时沿用原单次请求。
 
 数据默认`.learnhelper/`，LEARNHELPER_DATA_DIR覆盖。server/schema.sql直接初始化，无旧开发库升级；当前结构正常重启保留数据，残留任务恢复interrupted。浏览器预览Key存secrets.json的modelKeys；桌面版通过注入SecretCodec使用safeStorage加密同文件，权限0600，不返回前端。开发与正式桌面数据分别存系统应用数据目录的zhizhi-development／zhizhi，不自动迁移预览数据。
 
@@ -49,7 +49,7 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 ## 文档导航
 
-[工程索引](docs/README.md)列出01–14全部模块。产品／交互看01–02，模块看03，存储看04，接口看05，上下文看06，测试看07，模型附件看08，导入看09，设置数据看10，提示词看11及根目录prompts/（JSON为模板唯一来源，server/prompts.ts拼装），Electron运行及打包看12，一致性复用建议看13（未确认项不实施），文件夹看14。
+[工程索引](docs/README.md)列出01–16全部模块。产品／交互看01–02，模块看03，存储看04，接口看05，上下文看06，测试看07，模型附件看08，导入看09，设置数据看10，提示词看11及根目录prompts/（JSON为模板唯一来源，server/prompts.ts拼装），Electron运行及打包看12，一致性复用建议看13（未确认项不实施），文件夹看14，地图看15，联网循环看16。
 
 源码入口：src/App.tsx、src/client.ts、server/app.ts、server/store.ts、server/schema.sql。启动与命令见[README](README.md)。
 
@@ -57,7 +57,7 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 ## 验证基线与限制
 
-三种API与模型引导接入：66项相关代码测试、3项无截图浏览器检查、TypeScript／生产构建及Electron主进程构建通过。仅用合成配置和本机stub验证，不读取真实用户配置、不调用付费模型；检测自然语言使用prompts/context.json的modelCheck模板。实际供应商和图片能力仍需用户验收，尚未加入agent loop。
+三种API与模型引导接入：66项相关代码测试、3项无截图浏览器检查、TypeScript／生产构建及Electron主进程构建通过。仅用合成配置和本机stub验证，不读取真实用户配置、不调用付费模型；检测自然语言使用prompts/context.json的modelCheck模板。实际供应商和图片能力仍需用户验收，联网循环及验证见16。
 
 2026-11-07：文件夹标题按钮显式清除默认内边距并继承标题字距，确保与最近对话文字左边缘对齐；通过差异检查。
 
@@ -89,7 +89,7 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 
 2026-10-31功能回归：38项代码／协议测试及5项相关无截图Playwright测试通过；Electron源码入口与打包后macOS arm64应用均通过无截图smoke测试，涵盖实际safeStorage加密／重启解密、API鉴权、模拟流、偏好持久化和关窗退出。TypeScript／生产构建通过，仍有bundle体积提示。
 
-- 真实外部模型尚未端到端调用；协议能力以本机stub验证，不保证所有供应商参数兼容。当前无联网搜索或agent loop，后续另行设计。
+- 真实外部模型尚未端到端调用；协议能力以本机stub验证，不保证所有供应商参数兼容。联网循环以本机stub验证，实际搜索服务与工具调用模型尚未端到端实测。
 - 论文转换使用InkToMd；可用性、额度、正文和图片完整性依赖外部服务。代理规则见09，Clash本地端口7897。
 - 上下文JSON最多8MiB，另检查模型预算；重构无固定节点数上限，最终组装后检查模型上下文预算，保留关系异常校验。估算不是实际tokenizer。
 - 当前为Electron桌面应用，保留Web开发预览，不是纯静态／PWA。已配置跨平台打包，本轮验证macOS arm64；GitHub tag触发Actions和Releases发布已配置，矩阵为Windows x64／arm64和macOS arm64；使用GITHUB_TOKEN。签名／公证及自动安装更新后续再做；已支持GitHub Release更新检查与手动下载引导。
@@ -120,3 +120,7 @@ macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿�
 侧栏宽度180–360px，正文尽量保留480px，分界线hover250ms启用拖动／双三角光标，localStorage.sidebarWidth记忆；指针捕获及取消清理，折叠时inert，固定宽度内层避免展开挤压。导航以正文滚动区居中，常规行高10px。
 
 当前AI消息的二、三级标题目录显示于右上功能区，背景覆盖分支标签并在底部渐隐；二级12px／三级11px、紧凑行距和留白，默认可读灰色，当前章节及hover／键盘聚焦项文字加深，均无按钮底色；顶部左侧目录图标、右侧折叠按钮，展开收起有高度及淡入淡出动画，收起时禁用内部交互，支持减少动态效果偏好；颜色变量带浅色模式回退值；可跳转、跟随当前章节，正文不足阅读区1.2倍隐藏。通用showOutline默认开启，关闭时不渲染；目录和正文共用reading-surface纯色背景，底部以透明度遮罩渐隐，避免深色暗边；深色原生文本及公式选区使用深蓝底、浅色文字。主流和分支共用，流式、编辑及版本变化同步更新。 不同消息切换目录时，旧目录先淡出再展示新目录；出现和消失均有180ms透明度过渡，退出期间禁用交互，遵循系统减少动态效果偏好。
+
+联网配置复用secrets.json.searchKey（桌面safeStorage），在供应商页弹窗确认保存；配置后共用输入框图片／文件右侧显示关闭／自动，默认关闭，模式在页面内按输入框记忆，fake禁用。重构沿用目标流输入框模式。工具记录经SSE仅当前job展示，结束消失；保存回答附带来源链接，后续不回灌原始工具结果。每轮最多8次模型请求、12次工具操作、3分钟，工具30秒；最终请求逐次检查上下文估算预算，停止取消当前请求。无MCP／Skill／自定义工具入口，未调用真实收费服务。
+
+联网功能验证：58项相关代码检查、4项无截图浏览器检查、TypeScript／生产及Electron主进程构建通过。仅本机模拟服务，不读取真实用户配置或调用收费服务；实际供应商兼容及UI视觉仍需用户验收。

@@ -1,5 +1,12 @@
+import { BookOpen, Search, LoaderCircle } from 'lucide-react';
 import type { SearchProgress } from '../shared/search';
 export function SearchProgressPanel({ progress }: { progress: SearchProgress }) {
-  const running = progress.activities.some(item => item.status === 'running');
-  return <details className="search-progress-panel"><summary>{running ? '正在查找资料…' : '资料查询'} · {progress.activities.length} 次操作</summary><div>{progress.activities.map(item => <div key={item.id} className="search-activity"><span>{item.tool} · {item.status === 'running' ? '进行中' : item.status === 'error' ? '失败' : '完成'}</span><p>{item.input}</p>{item.message && <p role="status">{item.message}</p>}</div>)}{progress.sources.map(source => <a key={source.id} href={source.url} target="_blank" rel="noreferrer">{source.title}</a>)}</div></details>;
+  const searches = progress.activities.filter(item => item.tool === '搜索网页');
+  const reading = progress.activities.filter(item => item.tool === '读取网页');
+  const searching = searches.some(item => item.status === 'running');
+  const pendingReads = new Set(reading.filter(item => item.status === 'running').map(item => item.input)).size;
+  const read = new Set(reading.filter(item => item.status === 'complete').map(item => item.input)).size;
+  const count = searches.reduce((total, item) => total + (item.resultCount || 0), 0);
+  const failed = progress.activities.filter(item => item.status === 'error');
+  return <div className="search-progress-panel" role="status"><div className={`search-status ${searching || pendingReads ? 'has-running' : ''}`}>{searching || pendingReads ? <LoaderCircle size={13}/> : read ? <BookOpen size={13}/> : <Search size={13}/>}<span>{searching ? '正在检索资料…' : `已检索到 ${count} 篇资料`}{pendingReads ? ` · 正在精读 ${pendingReads} 篇资料` : read ? ` · 已精读 ${read} 篇资料` : ''}</span></div>{failed.length > 0 && <span>{failed.at(-1)?.message || '部分资料查询失败'}</span>}</div>;
 }

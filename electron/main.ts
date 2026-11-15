@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { installLinkView } from './link-view';
 import { Store } from '../server/store';
 import { createApp } from '../server/app';
 import { readLocalDocument } from '../server/local-document';
@@ -80,6 +81,7 @@ async function start() {
     return process.platform === 'darwin' || process.platform === 'win32';
   });
   const external=(url:string)=>{try{if(['http:','https:'].includes(new URL(url).protocol))void shell.openExternal(url);}catch{}};
+  installLinkView(window, external);
   window.webContents.setWindowOpenHandler(({url})=>{external(url);return {action:'deny'};});
   window.webContents.on('will-navigate',(event,url)=>{if(new URL(url).origin!==origin){event.preventDefault();external(url);}});
   window.webContents.on('will-attach-webview',event=>event.preventDefault());

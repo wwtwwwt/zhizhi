@@ -26,6 +26,7 @@
 | src/client.ts | 可订阅状态、HTTP、SSE任务、流缓存与删除清理 |
 | src/SendComposer.tsx | 主流／分支／选区共用输入及页面内草稿 |
 | src/Markdown.tsx、selection.ts、StreamingMarkdown.tsx | 渲染、DOM选区桥接、Markdown复制和流式更新 |
+| src/LinkViewer.tsx、shared/links.ts、electron/link-view.ts | 独立网页窗口、公开URL检查及隔离原生网页视图；不创建分支 |
 | src/ReasoningPanel.tsx | 折叠思考摘要及临时计时 |
 | src/SettingsPage.tsx、ModelManager.tsx | 设置分类、数据页和模型编辑 |
 | src/WindowPanel.tsx、useCenteredResize.ts | 共用管理弹窗、窗口尺寸同步与记忆 |

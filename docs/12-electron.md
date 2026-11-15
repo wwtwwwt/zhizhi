@@ -46,3 +46,7 @@ CI的ZHIZHI_RELEASE_TAG同时由Vite注入前端、build-electron.mjs注入Elect
 侧栏收起时macOS正文顶栏左侧预留96px给原生窗口按钮。系统材质开启时，侧栏hover／选中背景和分隔线采用低透明度颜色；侧栏隔离绘制层，列表操作按钮不叠加网页backdrop-filter，避免悬停时动态模糊层反复创建引起透明窗口合成闪烁。模糊由原生材质统一提供。材质切换即时生效，无需重启；独立弹窗背景模糊仍由原有设置控制。
 
 系统材质侧栏覆盖半透明白色提亮（浅色40%、深色约5%），浅色保留约60%底层材质贡献。实际颜色仍随系统材质和窗口后背景变化。该规则优先于普通深色侧栏底色，避免不透明背景遮挡原生材质。
+
+## 隔离网页查看器
+
+`electron/link-view.ts`管理临时WebContentsView，使用独立非持久session，无应用preload或Node能力，权限与下载默认拒绝。受限IPC仅应用主框架可调用；边界坐标随共用窗口动画及缩放同步，Esc和关闭清理。网页不获得API认证头，不成为对话分支；Web预览退回sandbox iframe。详见[02](02-ui-interactions.md)。无截图本机模拟检查可运行`node scripts/test-link-reader.mjs`，先构建前端及Electron主进程。

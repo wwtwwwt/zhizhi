@@ -44,7 +44,7 @@ export function createSearchTools(options: { key: string; signal: AbortSignal; o
     if (++calls > 12) throw new Error('本轮已达到12次工具调用上限');
     const activity = { id: calls, tool: name, input, status: 'running' as 'running' | 'complete' | 'error' };
     progress.activities.push(activity); publish();
-    try { const result = await fn(); activity.status = 'complete'; publish(); return result; }
+    try { const result = await fn(); activity.status = 'complete'; Object.assign(activity, { resultCount: name === '搜索网页' ? (result as { results: unknown[] }).results.length : 1 }); publish(); return result; }
     catch (error) {
       options.signal.throwIfAborted();
       activity.status = 'error'; const message = error instanceof Error ? error.message : '查询失败';

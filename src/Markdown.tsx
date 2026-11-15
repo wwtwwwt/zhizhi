@@ -45,9 +45,9 @@ export function Markdown({ source, anchors = [], onBranch, activeBranchId, onAct
     return <Fragment key={key}>{parts}</Fragment>;
   };
   const render = (node: Ast, key: string): React.ReactNode => {
-    // Keep a canonical newline text node for selection offsets as well as the
-    // visual break; a bare <br> has no DOM text and shifts later branch anchors.
-    if (node.type === 'break') return <Fragment key={key}>{leaf(node, `${key}-text`)}<br/></Fragment>;
+    // Render the canonical newline once. Combining it with <br> doubles the
+    // line break under pre-wrap; retaining the text preserves branch offsets.
+    if (node.type === 'break') return <span key={key} className="markdown-hard-break">{leaf(node, `${key}-text`)}</span>;
     if (node.type === 'image') return <span key={key} className="markdown-image-block"><DocumentImage key={node.url} url={node.url || ''} alt={node.alt || ''}/>{node.alt && <span className="image-caption">{leaf(node,`${key}-alt`)}</span>}</span>;
     if (node.value !== undefined) return leaf(node, key);
     const children = node.children?.map((n, i) => render(n, `${key}-${i}`));

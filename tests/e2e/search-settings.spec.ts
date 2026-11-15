@@ -40,6 +40,14 @@ test('search configuration is confirmed in a dialog and controls appear only aft
   await expect(control).toHaveText('关闭');
   await page.getByRole('button', { name:'发送问题', exact:true }).click();
   await expect.poll(() => sent?.webSearch).toBe('off');
+  await control.click();
+  await page.locator('button.new-chat').click();
+  await expect(control).toHaveText('自动');
+  await page.getByRole('textbox', { name:'输入你的问题',exact:true }).fill('新对话仍然联网');
+  await page.getByRole('button', { name:'发送问题',exact:true }).click();
+  await expect.poll(() => sent?.webSearch).toBe('auto');
+  await expect(control).toHaveText('自动');
+
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '配置联网搜索', exact: true }).click();
   await page.getByRole('button', { name: '清除联网密钥', exact: true }).click();
@@ -47,4 +55,25 @@ test('search configuration is confirmed in a dialog and controls appear only aft
   await page.getByRole('button', { name: '回到对话', exact: true }).click();
   await expect(page.getByRole('button', { name: '联网搜索', exact: true })).toHaveCount(0);
   await request.delete(`/api/models/${model.id}`);
+});
+
+test('link opens an independent reader and external-browser preference autosaves', async({page,request})=>{
+  await request.put('/api/settings',{data:{externalLinks:false}});
+  const imported=await(await request.post('/api/documents/import',{data:{name:'链接测试.md',markdown:'[参考网页](https://example.com/article)'}})).json();
+  await page.goto('/');await page.evaluate(id=>localStorage.setItem('lastSession',id),imported.id);await page.reload();
+  await page.route('https://example.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<html><body>隔离网页内容</body></html>'}));
+  const before=await(await request.get(`/api/sessions/${imported.id}/map`)).json();
+  await page.getByRole('link',{name:'参考网页'}).click();
+  const dialog=page.getByRole('dialog',{name:'网页',exact:true});await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'用默认浏览器打开'})).toBeVisible();
+  await expect(page.frameLocator('iframe[title="网页内容"]').getByText('隔离网页内容')).toBeVisible();
+  const after=await(await request.get(`/api/sessions/${imported.id}/map`)).json();expect(after).toEqual(before);
+  await dialog.getByRole('button',{name:'关闭网页',exact:true}).click();await expect(dialog).toHaveCount(0);
+  await page.getByRole('button',{name:'设置',exact:true}).click();await page.getByRole('tab',{name:'通用',exact:true}).click();
+  await page.getByRole('checkbox',{name:'始终使用默认浏览器打开链接'}).check();
+  await expect.poll(async()=> (await(await request.get('/api/settings')).json()).externalLinks).toBe(true);
+  await page.getByRole('button',{name:'回到对话',exact:true}).click();
+  const popupPromise=page.waitForEvent('popup');await page.getByRole('link',{name:'参考网页'}).click();const popup=await popupPromise;await popup.close();
+  await expect(page.getByRole('dialog',{name:'网页',exact:true})).toHaveCount(0);
+  await request.put('/api/settings',{data:{externalLinks:false}});
 });

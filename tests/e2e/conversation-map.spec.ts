@@ -117,12 +117,24 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   await rootNode.dblclick();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
+  let notePreviewRequests = 0;
+  page.on('request', request => { if (new URL(request.url()).pathname === `/api/streams/${note.streamId}`) notePreviewRequests++; });
   const branchQuestion = map.messages.find(message => message.id === branch.questionMessageId)!;
   await panel.locator(`[data-map-message="${branchQuestion.id}"]`).click();
   await expect(detail.locator('.map-detail-quote')).toContainText(source.selection_text.slice(0, 2));
   await panel.locator(`[data-map-message="${noteMessage.id}"]`).click();
   await expect(detail.locator('.map-detail-quote')).toContainText(branchSource.selection_text.slice(0, 2));
   await expect(detail.locator('strong')).toHaveText('深层笔记内容');
+  const branchNode = panel.locator(`[data-map-message="${branchQuestion.id}"]`);
+  const instantSelection = await branchNode.evaluate(async element => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    return element.getAttribute('aria-pressed');
+  });
+  expect(instantSelection).toBe('true');
+  await panel.locator(`[data-map-message="${noteMessage.id}"]`).click();
+  await expect(detail.locator('strong')).toHaveText('深层笔记内容');
+  expect(notePreviewRequests).toBe(1);
   await detail.getByRole('button', { name: '关闭消息预览' }).click();
   await expect(detail).toHaveCount(0);
   const search = page.getByRole('searchbox', { name: '搜索对话地图' });

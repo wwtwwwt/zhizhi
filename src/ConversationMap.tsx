@@ -22,6 +22,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   const [resultIndex, setResultIndex] = useState(0);
   const [selection, setSelection] = useState<{ id: string; hit?: MapSearchHit } | null>(null);
   const [messagePreview, setMessagePreview] = useState<Message | null>(null);
+  const previewStreams = useMemo(() => new Map<string, Stream>(), [sessionId, state.streams]);
+  const hadPreview = useRef(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const contentPreview = useRef<HTMLDivElement>(null);
@@ -71,6 +73,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   const matches = useMemo(() => new Set(searchHits.map(hit => hit.messageId)), [searchHits]);
   const currentHit = searchHits[resultIndex];
   const selectedMessage = data?.messages.find(message => message.id === selection?.id);
+  const cachedPreviewStream = selectedMessage && (state.streams[selectedMessage.streamId] || previewStreams.get(selectedMessage.streamId));
+  const previewMessage = cachedPreviewStream?.messages.find(message => message.id === selectedMessage?.id) || (messagePreview?.id === selectedMessage?.id ? messagePreview : null);
   const selectedBranch = selectedMessage && branches.get(selectedMessage.streamId);
   const selectedQuote = selectedBranch && selectedBranch.parentMessageId === selectedMessage?.parentId ? selectedBranch.anchor.selected_text : undefined;
   const liveText = selectedMessage && Object.values(state.jobs).find(job => job.messageId === selectedMessage.id)?.text;
@@ -78,26 +82,27 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
     setMessagePreview(null); setPreviewError(''); setPreviewLoading(false);
     if (!open || !selectedMessage) return;
     const select = (stream: Stream) => stream.messages.find(message => message.id === selectedMessage.id);
-    const cached = state.streams[selectedMessage.streamId];
+    const cached = state.streams[selectedMessage.streamId] || previewStreams.get(selectedMessage.streamId);
     const message = cached && select(cached);
     if (message) { setMessagePreview(message); return; }
     const abort = new AbortController();
     setPreviewLoading(true);
     void fetch(`/api/streams/${selectedMessage.streamId}`, { signal: abort.signal }).then(async response => {
       if (!response.ok) throw new Error('无法读取完整消息');
-      const message = select(await response.json() as Stream);
+      const stream = await response.json() as Stream;
+      const message = select(stream);
       if (!message) throw new Error('消息已不可用');
-      if (!abort.signal.aborted) setMessagePreview(message);
+      if (!abort.signal.aborted) { previewStreams.set(selectedMessage.streamId, stream); setMessagePreview(message); }
     }).catch(error => { if (!abort.signal.aborted) setPreviewError(error.message); })
       .finally(() => { if (!abort.signal.aborted) setPreviewLoading(false); });
     return () => abort.abort();
-  }, [open, selectedMessage, state.streams]);
+  }, [open, selectedMessage, state.streams, previewStreams]);
   useLayoutEffect(() => {
     const element = contentPreview.current;
     if (!element) return;
     const target = selection?.hit?.quote ? element.querySelector<HTMLElement>('.map-detail-quote') : selection?.hit?.slotId ? element.querySelector<HTMLElement>(`[data-preview-slot="${CSS.escape(selection.hit.slotId)}"]`) : null;
     element.scrollTop = target ? element.scrollTop + target.getBoundingClientRect().top - element.getBoundingClientRect().top - 12 : 0;
-  }, [selection, messagePreview]);
+  }, [selection, previewMessage]);
   const centerNode = (id: string) => {
     const element = viewport.current, node = element?.querySelector<HTMLElement>(`[data-map-message="${CSS.escape(id)}"]`);
     if (!element || !node) return;
@@ -124,7 +129,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
     if (open && currentHit) { clearTimeout(clickTimer.current); setSelection({ id: currentHit.messageId, hit: currentHit }); }
   }, [open, currentHit]);
   useEffect(() => {
-    if (open && selection) centerNode(selection.id);
+    if (open && selection && (selection.hit || !hadPreview.current)) centerNode(selection.id);
+    hadPreview.current = open && !!selection;
   }, [open, selection, layout]);
   const moveResult = (direction: number) => {
     if (!searchHits.length) return;
@@ -138,8 +144,10 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   };
   const selectNode = (message: MapMessage) => {
     clearTimeout(clickTimer.current);
-    // Let a double click finish before moving the node into the narrower pane.
-    clickTimer.current = setTimeout(() => setSelection({ id: message.id }), 280);
+    // Only the initial opening moves the clicked node. Once open, switch
+    // immediately and keep the map still so a second click can navigate.
+    if (selectedMessage) setSelection({ id: message.id });
+    else clickTimer.current = setTimeout(() => setSelection({ id: message.id }), 280);
   };
   return <div ref={layer} className={`conversation-map-layer ${open ? 'open' : ''}`} style={{ top: headerHeight }} aria-hidden={!open} inert={!open}>
     <button className={`conversation-map-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''}`} tabIndex={-1} aria-label="关闭对话地图" onClick={onClose}/>
@@ -171,8 +179,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
         {selectedQuote && <blockquote className={`map-detail-quote ${selection?.hit?.quote ? 'map-preview-match' : ''}`}><span>引用</span><p>{selectedQuote}</p></blockquote>}
         {previewLoading && <p role="status" className="conversation-map-status">正在读取消息…</p>}
         {previewError && <p role="alert" className="conversation-map-status">{previewError}，以下仅显示消息摘要。</p>}
-        {liveText ? <MarkdownBlocks source={liveText}/> : messagePreview?.slots.length ? messagePreview.slots.map(slot => <div key={slot.id} data-preview-slot={slot.id} className={selection?.hit?.slotId === slot.id && selection?.hit?.nodeId === slot.node.id ? 'map-preview-match' : undefined}><MarkdownBlocks source={slot.node.markdown} firstMeta={slot.meta}/></div>) : <MarkdownBlocks source={messagePreview?.content_markdown || selectedMessage.preview || (selectedMessage.status === 'streaming' || selectedMessage.status === 'queued' ? '正在生成…' : '')}/>}
-        {!!messagePreview?.attachments?.length && <div className="map-detail-attachments">{messagePreview.attachments.map(attachment => <span key={attachment.id}>{attachment.name}</span>)}</div>}
+        {liveText ? <MarkdownBlocks source={liveText}/> : previewMessage?.slots.length ? previewMessage.slots.map(slot => <div key={slot.id} data-preview-slot={slot.id} className={selection?.hit?.slotId === slot.id && selection?.hit?.nodeId === slot.node.id ? 'map-preview-match' : undefined}><MarkdownBlocks source={slot.node.markdown} firstMeta={slot.meta}/></div>) : <MarkdownBlocks source={previewMessage?.content_markdown || selectedMessage.preview || (selectedMessage.status === 'streaming' || selectedMessage.status === 'queued' ? '正在生成…' : '')}/>}
+        {!!previewMessage?.attachments?.length && <div className="map-detail-attachments">{previewMessage.attachments.map(attachment => <span key={attachment.id}>{attachment.name}</span>)}</div>}
       </div>
     </aside>}
     </div>

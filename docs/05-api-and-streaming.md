@@ -33,9 +33,11 @@
 | POST /updates/check | manual布尔值默认false；开发构建不检查，自动检查受偏好与12小时间隔限制，手动可绕过 |
 | GET／PUT /settings | 获取／部分更新通用偏好、fakeDelay |
 | GET／POST /models | 获取模型列表／添加模型 |
-| PUT／DELETE /models/:id | 更新／删除模型，包含图片能力；fake只允许更新fakeDelay且不可删除 |
+| PUT／DELETE /models/:id | 更新／删除模型，包含apiType、可选authType、图片能力和参数；fake只允许更新fakeDelay且不可删除 |
 | 模型切换 | 在输入框模型菜单中选择并保存上次选择到浏览器 localStorage |
-| POST /models/discover | baseUrl、可选apiKey／configuredModelId，读取上游/models |
+| POST /models/import-sources | 自动读取Claude Code／Codex用户级配置，返回无密钥的导入来源元数据，no-store |
+| POST /models/discover | baseUrl、apiType（默认chat）、可选authType／apiKey／configuredModelId／importSourceId，读取上游模型列表并处理分页 |
+| POST /models/check | 同discover加model，发送简短测试请求，返回ok和输出参数建议outputParameter，不创建模型或聊天记录 |
 | GET /attachments/:id | 返回主动发送的附件内容 |
 | POST /documents/import | name、markdown、可选documentPath及resources，导入文档 |
 | POST /documents/paper | url，经InkToMd转换并导入 |
@@ -63,11 +65,19 @@ complete只在数据库提交成功后发送。异常断流不能当完成；停
 
 SSE解析支持跨chunk UTF-8、CRLF、多行data、注释和多个事件；网络chunk不等于完整事件。关闭弹窗保留全局生成连接；离开页面／刷新断连会中断任务，不支持断点续传。普通回复手动停止时将已生成正文切块并纳入后续上下文，保留stopped状态；停止接口读取内存中的最新正文，避免遗漏尚未周期落库的末尾。失败／意外中断也切块已有正文并纳入上下文。无块的终态消息自动清理，前端停止／失败toast可恢复最新问题。重构停止不创建部分候选。不提供重试操作，用户可在底部继续提问。
 
-## Chat Completions adapter
+## 三种生成协议
 
-生成快照为 `{ modelConfig }`，密钥按模型ID在执行时读取。adapter发送到Base URL的`/chat/completions`：启用参数、model、messages、stream=true。本地预算context_length不发上游。
+生成快照为 `{ modelConfig }`，密钥按模型ID在执行时读取。apiType选择chat／responses／messages，默认chat；`providers/protocol.ts`转换统一上下文及输出上限参数，本地预算context_length不发上游。
 
-解析choices[0].delta.content；有reasoning_content时单独回调。收到[DONE]才算协议完成。非SSE、错误JSON、空正文、提前断连均进入错误路径。等待响应和事件间空闲超时为60秒；用户停止会abort上游，不自动重试或降级模拟模型。
+| 协议 | 路径及认证 | 正文／思考增量 | 完成标志 |
+|---|---|---|---|
+| Chat Completions | Base URL + /chat/completions，Bearer | choices[0].delta.content／reasoning_content | [DONE] |
+| Responses | Base URL + /responses，Bearer | response.output_text.delta（含refusal.delta）／reasoning_summary_text.delta | response.completed |
+| Anthropic Messages | Base URL + /v1/messages（已有/v1不重复），x-api-key或Bearer，附anthropic-version | content_block_delta中的text_delta／thinking_delta | message_stop |
+
+Responses使用完整input及store=false，不依赖服务端会话。Messages将system从消息数组分离，图片转换为source。统一事件包含正文、思考、完成及协议metadata，当前生成只保存正文／思考，不执行工具调用。非SSE、错误JSON、错误事件、提前断连均进入错误路径；Responses incomplete按未完成处理，已有正文仍按现有错误流程保存切块。无块终态消息按共用规则清理。等待响应和事件间空闲超时为60秒；用户停止会abort上游，不自动重试或降级模拟模型。带密钥请求拒绝重定向，避免将凭据转发到另一地址。
+
+模型列表超时20秒；分页按has_more及游标读取，最多100页，超出时明确报错并允许手动输入，不静默截断。连接／检测请求会在客户端断开时取消。可用性测试上限256 token、总超时60秒，可能计费；仅当Chat服务明确拒绝max_tokens并要求max_completion_tokens时，以后一参数重新检测，返回建议供新模型保存。普通对话不自动进行这种参数重试。导入id只在服务端解析密钥，绑定原地址、协议及认证方式；不随模型配置持久化。
 
 fake经loopback调用内置端点，复用相同adapter和SSE解析器。固定样本覆盖Markdown、公式、分支与重构；先输出明确模拟的reasoning_content，再正文。默认间隔30ms，支持中途error／disconnect测试场景，不访问外部模型。当前输入框模型选择显示所选模型，无额外常驻状态灯。
 

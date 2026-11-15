@@ -1,7 +1,10 @@
 import type { ChatMessage } from './types';
 
 export type ModelParameter = { key: string; value: string | number | boolean | null | object; enabled: boolean };
-export type ModelConfig = { id: string; provider: 'fake' | 'openai'; name: string; baseUrl: string; model: string; supportsImages: boolean; parameters: ModelParameter[]; hasApiKey?: boolean; fixed?: boolean; fakeDelay?: number };
+export type ApiType = 'chat' | 'responses' | 'messages';
+export type ModelConfig = { id: string; provider: 'fake' | 'openai'; apiType?: ApiType; authType?: 'bearer' | 'api-key'; name: string; baseUrl: string; model: string; supportsImages: boolean; parameters: ModelParameter[]; hasApiKey?: boolean; fixed?: boolean; fakeDelay?: number };
+export type ModelImportSource = { id: string; source: string; baseUrl: string; apiType: ApiType; authType?: 'bearer' | 'api-key'; model?: string };
+export const apiLabels: Record<ApiType, string> = { chat: 'Chat Completions', responses: 'Responses', messages: 'Anthropic Messages' };
 export type AttachmentInput = { name: string; kind: 'image' | 'text'; mime: string; data: string };
 export type AttachmentInfo = { id: string; name: string; kind: 'image' | 'text'; mime: string; size: number; text?: string };
 export type SendOptions = { modelId?: string; attachments?: AttachmentInput[] };
@@ -15,7 +18,7 @@ export const fakeModel = (delay = 30): ModelConfig => ({ id: 'fake', provider: '
 export function parameter(model: ModelConfig, key: string) { return model.parameters.find(p => p.enabled && p.key === key)?.value; }
 export function modelBudget(model: ModelConfig) {
   const limit = Number(parameter(model, 'context_length')) || 128000;
-  const output = Number(parameter(model, 'max_completion_tokens') ?? parameter(model, 'max_tokens')) || 4096;
+  const output = Number(parameter(model, 'max_output_tokens') ?? parameter(model, 'max_completion_tokens') ?? parameter(model, 'max_tokens')) || 4096;
   return { limit, output };
 }
 export function estimateText(text: string): number {
@@ -32,15 +35,15 @@ export function requestParameters(model: ModelConfig) {
 }
 export function validateParameters(parameters: ModelParameter[]): string | null {
   const keys = new Set<string>();
-  const reserved = new Set(['model','messages','stream','api_key','apiKey','baseUrl','base_url','headers','Authorization','__fake','__proto__','prototype','constructor']);
+  const reserved = new Set(['model','messages','input','system','stream','store','api_key','apiKey','baseUrl','base_url','headers','Authorization','__fake','__proto__','prototype','constructor']);
   for (const p of parameters) {
     if (!/^[A-Za-z][\w.]*$/.test(p.key) || reserved.has(p.key)) return '参数名无效或属于保留字段';
     if (keys.has(p.key)) return '参数名不能重复'; keys.add(p.key);
     if (!p.enabled) continue;
     if (p.key === 'context_length' && (!Number.isInteger(p.value) || Number(p.value) < 256 || Number(p.value) > 10_000_000)) return '上下文长度需要为 256 到 10000000 的整数';
-    if (['max_tokens','max_completion_tokens'].includes(p.key) && (!Number.isInteger(p.value) || Number(p.value) < 1)) return '输出 token 上限需要为正整数';
+    if (['max_tokens','max_completion_tokens','max_output_tokens'].includes(p.key) && (!Number.isInteger(p.value) || Number(p.value) < 1)) return '输出 token 上限需要为正整数';
     if (p.key === 'temperature' && (typeof p.value !== 'number' || p.value < 0 || p.value > 2)) return 'temperature 需要为 0 到 2 的数字';
   }
-  if (parameters.some(p => p.enabled && p.key === 'max_tokens') && parameters.some(p => p.enabled && p.key === 'max_completion_tokens')) return 'max_tokens 和 max_completion_tokens 只能启用一个';
+  if (parameters.filter(p => p.enabled && ['max_tokens','max_completion_tokens','max_output_tokens'].includes(p.key)).length > 1) return '输出 token 上限参数只能启用一个';
   return null;
 }

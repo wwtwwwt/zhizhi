@@ -4,6 +4,12 @@
 
 软件文档（施工中）
 
+## 接入模型
+
+在「设置 → 供应商」添加模型，支持 OpenAI Chat Completions、OpenAI Responses 和 Anthropic Messages 三种接口。
+
+添加时自动查找本机 Claude Code、Codex 中同时配置了 API 地址和密钥的来源，也可以手动填写。选择或输入模型 ID，检测通过后设置名称、图片能力和上下文长度，最后保存。可用性检测会发送一条简短请求，可能产生少量 API 费用；图片能力及容量需按模型说明填写。账号订阅登录凭据不会作为 API Key 导入。已有模型可直接编辑，无需重复走引导。
+
 ## 许可证
 
 本项目采用 **GNU Affero General Public License v3.0**，许可证标识为 `AGPL-3.0-only`。完整协议文本见 [LICENSE](LICENSE)。

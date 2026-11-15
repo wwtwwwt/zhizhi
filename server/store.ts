@@ -250,7 +250,7 @@ export class Store {
   generation(streamId: string, messageId: string | null, sourceNodeId: string | null, kind: string, messages: ChatMessage[], requestId: string, signature: string, selectedModel?: ModelConfig) {
     const model = selectedModel || this.models.get();
     const settings = { modelConfig: model };
-    if (model.provider === 'openai' && !this.models.key(model.id)) throw new AppError(400, 'MODEL_CONFIG_REQUIRED', '请先配置此模型的 API Key');
+    if (model.provider === 'openai' && !this.models.key(model.id) && !['127.0.0.1','localhost','[::1]'].includes(new URL(model.baseUrl).hostname)) throw new AppError(400, 'MODEL_CONFIG_REQUIRED', '请先配置此模型的 API Key');
     if (!model.supportsImages && messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'))) throw new AppError(400, 'IMAGES_UNSUPPORTED', '当前上下文包含图片，请选择支持图片输入的模型');
     const budget = modelBudget(model); if (estimateMessages(messages) + budget.output > budget.limit) throw new AppError(400, 'CONTEXT_TOO_LARGE', '上下文超过所选模型的预算，请减少附件或选择更大上下文的模型');
     const context = JSON.stringify(messages); if (Buffer.byteLength(context) > 8 * 1024 * 1024) throw new AppError(400, 'CONTEXT_TOO_LARGE', '上下文过长，请选择较小范围的内容');

@@ -10,7 +10,7 @@
 | `prompts/fake.json` | 固定模拟思考摘要 | 否，仅用于 fake 输出 |
 | `server/prompts.ts` | 替换变量、按角色拼装系统／用户消息 | 是，不包含自然语言模板 |
 | `server/store.ts` | 确定读哪些节点、消息、附件以及何时保存快照 | 是，负责数据范围 |
-| `server/providers/chat.ts` | 将已组装消息发给 Chat Completions 服务 | 是，不追加隐藏提示词 |
+| `server/providers/chat.ts`、`protocol.ts` | 将已组装消息转换并发送给Chat Completions／Responses／Messages服务 | 是，不追加隐藏提示词 |
 | `server/providers/fake.ts` | 固定正文 fixture | 否，不是真实模型提示词 |
 
 模板不决定读取权限。把“参考所有分支”写进 system 不会让模型获得未组装的数据。若要更改范围，必须同步调整 Store 的读取逻辑、文档和验证。
@@ -65,6 +65,8 @@
 - 读取不到的内容不能靠改这条模板补齐；新变量必须由代码显式提供。
 
 ## 3. 拼装示例
+
+模型添加引导还使用 `modelCheck`：无变量，仅在用户点击模型检测时作为单条 user 消息发送，不加 replySystem、不携带对话内容、不写入对话历史。检测最多256输出token、60秒，可能产生供应商费用；图片能力由用户配置，不通过额外图片请求检测。
 
 下列仅展示结构，真实文案从 JSON 读取：
 

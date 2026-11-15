@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-11-10（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-15（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -26,7 +26,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 - 外观支持light／dark／system，默认跟随系统；src/theme.ts监听系统主题，localStorage.appearance只用于启动缓存，SQLite settings.theme为权威偏好。
 - 通用设置自动保存，无保存按钮：偏好即时应用，文本防抖450ms；失焦／离开提交待保存项，串行合并写入。模型配置（含模拟模式）使用WindowPanel弹窗，点击保存才生效；取消／关闭不落库。
 - 模型统一逐个配置，fake为固定模型并模拟reasoning；模型配置包含图片能力。输入框不再有默认模型设置，自动记住浏览器上次选择的模型；模型项悬停提示，支持复制配置。附件按图片能力处理，思考摘要与正文分离。
-- 供应商页分开我的模型／体验模式；配置弹窗按连接服务商→选择模型组织，服务商预设仅预填可编辑API地址（OpenAI／DeepSeek／硅基流动／本机LM Studio／其他兼容服务）。名称自动生成，名称／上下文／图片能力默认折叠在模型选项，请求参数独立高级设置；手动保存／取消语义保持，未新增供应商存储。
+- 供应商页恢复统一模型列表；添加／复制模型采用可选配置导入→连接→模型选择与测试→选项→保存引导，已有模型直接编辑。只自动读取Claude Code／Codex用户级显式地址和API密钥，不读取订阅OAuth、不执行取密钥命令；前端只拿来源id，密钥在服务端解析并绑定原连接，确认后写入现有密钥存储。API地址有效后显示密钥，列表失败保留手动ID路径。检测请求最多256输出token、60秒，用户点击触发且界面注明可能计费。名称／图片／上下文／最长输出直接展示，请求参数折叠，新建temperature默认禁用。详情见08／10。
 - 品牌图标使用src/assets/zhizhi-mark.svg：圆形分支节点与Z形连线，用于AI头像和网页favicon（侧栏仅展示枝知文字）；交互中的追问／分支图标仍使用GitBranch。
 - 输入框支持剪贴板File粘贴与拖入，沿用附件限制；最新AI回答可删除本轮并恢复用户正文及附件到本流草稿前部，停止／失败从顶部toast恢复问题；无块终态消息自动清理，后端事务校验并清理分支。Windows／Linux无菜单栏，macOS保留原生菜单。
 - 首页其他文档手动转换引导MinerU，论文自动转换仍用InkToMd。
@@ -41,7 +41,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 
 ## 当前实现
 
-React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型使用Chat Completions adapter，默认固定模拟模型。
+React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型支持Chat Completions／Responses／Anthropic Messages，apiType及可选authType存现有模型JSON，未指定apiType时为chat；统一请求／事件转换在server/providers/protocol.ts，共用chat.ts流式生命周期。Responses每次发完整上下文、store=false，不依赖服务端会话；Messages独立system及图片source。默认固定模拟模型，无新表。Agent／工具历史尚未实现，metadata事件仅预留扩展，不声称已持久化完整协议块。
 
 数据默认`.learnhelper/`，LEARNHELPER_DATA_DIR覆盖。server/schema.sql直接初始化，无旧开发库升级；当前结构正常重启保留数据，残留任务恢复interrupted。浏览器预览Key存secrets.json的modelKeys；桌面版通过注入SecretCodec使用safeStorage加密同文件，权限0600，不返回前端。开发与正式桌面数据分别存系统应用数据目录的zhizhi-development／zhizhi，不自动迁移预览数据。
 
@@ -56,6 +56,8 @@ React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端
 对话地图见[15](docs/15-conversation-map.md)：顶栏右侧按钮下拉覆盖正文，面板占顶栏以下可用高度90%，正文压暗并跟随blurBackdrop模糊，按钮／下方遮罩／Esc关闭。10px圆点对应消息，当前阅读节点外圈标记；主流左侧竖排、分支向右紧凑展开，列距34px／行距24px、1.5px直角连线；圆点内悬停160ms预览，浮窗远离鼠标，点击关闭地图并定位主消息或恢复深层分支路径，祖先也定位来源消息。整体居中、溢出双轴滚动，不支持缩放。地图只读取当前可见版本能到达的分支，使用现有数据推导、不新增存储；仅展开时请求，随流／会话刷新更新。展开后原顶栏地图按钮旁显示内容搜索，全文及分支首节点引用参与匹配，220ms防抖、命中节点高亮并自动定位；面板内按需放大Markdown命中块预览，无搜索时不显示预览栏或分割线。搜索跳转到命中块并高亮1.8秒，引用命中定位来源引用，核对当前版本以拒绝过期结果。节点预览在首节点展示引用原文。正文阅读区底部28px渐隐衔接输入框，不拦截鼠标，末尾保留30px空白。
 
 ## 验证基线与限制
+
+三种API与模型引导接入：66项相关代码测试、3项无截图浏览器检查、TypeScript／生产构建及Electron主进程构建通过。仅用合成配置和本机stub验证，不读取真实用户配置、不调用付费模型；检测自然语言使用prompts/context.json的modelCheck模板。实际供应商和图片能力仍需用户验收，尚未加入agent loop。
 
 2026-11-07：文件夹标题按钮显式清除默认内边距并继承标题字距，确保与最近对话文字左边缘对齐；通过差异检查。
 

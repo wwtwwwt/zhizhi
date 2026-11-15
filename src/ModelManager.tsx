@@ -1,86 +1,167 @@
-import { useRef, useState } from 'react';
-import { Plus, Trash2, RefreshCw, X, Copy, SlidersHorizontal } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Trash2, RefreshCw, X, Copy, SlidersHorizontal, ChevronLeft, Check, ArrowRight } from 'lucide-react';
 import { api, loadModels, loadSettings, notify, useAppState } from './client';
-import { defaultParameters, validateParameters, type ModelConfig, type ModelParameter } from '../shared/models';
+import { apiLabels, defaultParameters, validateParameters, type ApiType, type ModelConfig, type ModelImportSource, type ModelParameter } from '../shared/models';
 import { WindowPanel } from './WindowPanel';
 
 type Row = { key: string; raw: string; enabled: boolean };
-const providers = [
-  { name: 'OpenAI', url: 'https://api.openai.com/v1' },
-  { name: 'DeepSeek', url: 'https://api.deepseek.com' },
-  { name: '硅基流动', url: 'https://api.siliconflow.cn/v1' },
-  { name: '本机服务（LM Studio）', url: 'http://127.0.0.1:1234/v1' },
-  { name: '其他兼容服务', url: '' },
+type Step = 'loading' | 'source' | 'connection' | 'model' | 'options';
+const providers: { name: string; url: string; api: ApiType }[] = [
+  { name: 'OpenAI', url: 'https://api.openai.com/v1', api: 'responses' },
+  { name: 'Anthropic', url: 'https://api.anthropic.com', api: 'messages' },
+  { name: 'DeepSeek', url: 'https://api.deepseek.com', api: 'chat' },
+  { name: '硅基流动', url: 'https://api.siliconflow.cn/v1', api: 'chat' },
+  { name: '本机服务（LM Studio）', url: 'http://127.0.0.1:1234/v1', api: 'chat' },
+  { name: '其他兼容服务', url: '', api: 'chat' },
 ];
-export function ModelManager() {
-  const state = useAppState(); const [editing, setEditing] = useState<ModelConfig | 'new' | null>(null);
-  const openCopy = (model: ModelConfig) => setEditing({ ...model, id: '', name: `${model.name} 副本`, hasApiKey: false });
-  return <>{editing && <WindowPanel title="配置模型" onClose={() => setEditing(null)}><ModelEditor key={typeof editing === 'string' ? editing : editing.id || 'copy'} model={editing === 'new' ? undefined : editing} onBack={() => setEditing(null)}/></WindowPanel>}<div className="model-manager-body" inert={!!editing}><div className="model-list-heading"><div><span>我的模型</span><p className="model-field-hint">连接你使用的 AI 服务，在对话中随时切换模型。</p></div><button className={state.models.some(model => !model.fixed) ? "secondary-button" : "primary-button"} onClick={() => setEditing('new')}><Plus size={14}/>添加模型</button></div>{!state.models.some(model => !model.fixed) && <div className="model-setup-empty"><strong>添加第一个模型</strong><p>准备好服务商的 API Key，选择模型后即可开始对话。本机服务也可以连接。</p></div>}{[false,true].map(fixed => <section className={fixed ? 'model-demo-section' : ''} key={String(fixed)}>{fixed && <h3>体验模式</h3>}<div className="model-list">{state.models.filter(model => !!model.fixed === fixed).map(model => <div className="model-row" key={model.id} title={`模型：${model.name}`}><button onClick={() => setEditing(model)}><strong>{model.name}</strong><span>{model.fixed ? '无需密钥，用于体验界面' : model.model}</span></button>{!model.fixed && <button className="icon-button" aria-label={`复制模型：${model.name}`} title="复制模型配置" onClick={() => openCopy(model)}><Copy size={14}/></button>}<button className="icon-button" aria-label={`编辑模型：${model.name}`} title="配置模型" onClick={() => setEditing(model)}><SlidersHorizontal size={14}/></button>{!model.fixed && <button className="icon-button" aria-label={`删除模型：${model.name}`} onClick={async () => { if (state.settings?.confirmDeletion !== false && !confirm(`删除模型“${model.name}”？聊天记录会保留。`)) return; try { await api(`/models/${model.id}`, 'DELETE'); await loadModels(); await loadSettings(); } catch (e) { notify((e as Error).message); } }}><Trash2 size={14}/></button>}</div>)}</div></section>)}</div></>;
+const validUrl = (value: string) => { try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash; } catch { return false; } };
+const shortName = (id: string) => (id.trim().split('/').at(-1) || '').split('-').map(part => /^gpt$/i.test(part) ? 'GPT' : /^[a-z]/i.test(part) ? part[0].toUpperCase() + part.slice(1) : part).join('-');
 
+export function ModelManager() {
+  const state = useAppState();
+  const [editing, setEditing] = useState<ModelConfig | 'new' | null>(null);
+  return <>
+    {editing && <WindowPanel title="配置模型" onClose={() => setEditing(null)}><ModelEditor key={typeof editing === 'string' ? editing : editing.id || 'copy'} model={editing === 'new' ? undefined : editing} onBack={() => setEditing(null)}/></WindowPanel>}
+    <div className="model-manager-body" inert={!!editing}>
+      <div className="model-list-heading"><span>模型</span><button className="secondary-button" onClick={() => setEditing('new')}><Plus size={14}/>添加模型</button></div>
+      <div className="model-list">{state.models.map(model => <div className="model-row" key={model.id} title={`模型：${model.name}`}>
+        <button onClick={() => setEditing(model)}><strong>{model.name}</strong><span>{model.fixed ? '内置模拟模型' : model.model}</span></button>
+        {!model.fixed && <button className="icon-button" aria-label={`复制模型：${model.name}`} title="复制模型配置" onClick={() => setEditing({ ...model, id: '', name: `${model.name} 副本`, hasApiKey: false })}><Copy size={14}/></button>}
+        <button className="icon-button" aria-label={`编辑模型：${model.name}`} title="配置模型" onClick={() => setEditing(model)}><SlidersHorizontal size={14}/></button>
+        {!model.fixed && <button className="icon-button" aria-label={`删除模型：${model.name}`} title="删除模型" onClick={async () => {
+          if (state.settings?.confirmDeletion !== false && !confirm(`删除模型“${model.name}”？聊天记录会保留。`)) return;
+          try { await api(`/models/${model.id}`, 'DELETE'); await loadModels(); await loadSettings(); } catch (e) { notify((e as Error).message); }
+        }}><Trash2 size={14}/></button>}
+      </div>)}</div>
+    </div>
+  </>;
 }
+
 function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => void }) {
-  const parameters = model?.parameters || defaultParameters();
-  const [name,setName] = useState(model?.name || ''), [baseUrl,setBaseUrl] = useState(model?.baseUrl || 'https://api.openai.com/v1');
-  const [provider,setProvider] = useState(() => providers.find(p => p.url === (model?.baseUrl || 'https://api.openai.com/v1'))?.name || '其他兼容服务');
-  const [key,setKey] = useState(''), [clearKey,setClearKey] = useState(false), [modelId,setModelId] = useState(model?.model || ''), [vision,setVision] = useState(model?.supportsImages || false);
-  const [contextLength,setContextLength] = useState(String(parameters.find(p=>p.key==='context_length' && p.enabled)?.value || 128000));
-  const [rows,setRows] = useState<Row[]>(parameters.filter(p=>p.key!=='context_length').map(p => ({ key:p.key,raw:typeof p.value === 'string' ? p.value : JSON.stringify(p.value),enabled:p.enabled })));
-  const [discovered,setDiscovered] = useState<string[]>([]), [showModels,setShowModels] = useState(false), [fetching,setFetching] = useState(false), [delay,setDelay] = useState(model?.fakeDelay || 0),[saving,setSaving]=useState(false),[error,setError]=useState('');
-  const discoveryRequest = useRef(0);
-  const options = useRef<HTMLDetailsElement>(null);
-  const hasKey=!!model?.hasApiKey;
-  const shortName = (id:string) => { const value = id.trim().split('/').at(-1) || id.trim(); return value.split('-').map((part, index) => index === 0 && /^gpt$/i.test(part) ? 'GPT' : /^[a-z]/i.test(part) ? part[0].toUpperCase() + part.slice(1) : part).join('-'); };
-  const changeModel = (id:string) => { setModelId(id); if (!name.trim() || name === shortName(modelId)) setName(shortName(id)); };
-  const resetDiscovery = () => { discoveryRequest.current++; setDiscovered([]); setShowModels(false); setFetching(false); };
-  const readModels = async () => {
-    const request = ++discoveryRequest.current; setFetching(true); setShowModels(false);
+  const editing = !!model?.id;
+  const parameters = model?.parameters || defaultParameters().map(parameter => parameter.key === 'temperature' ? { ...parameter, enabled: false } : parameter);
+  const [step, setStep] = useState<Step>(editing ? 'options' : 'loading');
+  const [sources, setSources] = useState<ModelImportSource[]>([]), [sourceId, setSourceId] = useState<string>();
+  const [provider, setProvider] = useState(providers.find(p => p.url === model?.baseUrl)?.name || '');
+  const [baseUrl, setBaseUrl] = useState(model?.baseUrl || ''), [apiType, setApiType] = useState<ApiType>(model?.apiType || 'chat');
+  const [authType, setAuthType] = useState<ModelConfig['authType']>(model?.authType);
+  const [key, setKey] = useState(''), [clearKey, setClearKey] = useState(false);
+  const [modelId, setModelId] = useState(model?.model || ''), [name, setName] = useState(model?.name || '');
+  const [vision, setVision] = useState(model?.supportsImages || false);
+  const [contextLength, setContextLength] = useState(String(parameters.find(p => p.key === 'context_length' && p.enabled)?.value || 128000));
+  const [rows, setRows] = useState<Row[]>(parameters.filter(p => p.key !== 'context_length').map(p => ({ key: p.key, raw: typeof p.value === 'string' ? p.value : JSON.stringify(p.value), enabled: p.enabled })));
+  const [discovered, setDiscovered] = useState<string[]>([]), [filter, setFilter] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [listError, setListError] = useState('');
+  const [delay, setDelay] = useState(model?.fakeDelay || 0), [verified, setVerified] = useState(false);
+  const request = useRef<AbortController | null>(null), locked = useRef(false);
+  const hasKey = !!model?.hasApiKey;
+  const connection = { baseUrl: baseUrl.trim(), apiType, authType, apiKey: key.trim(), importSourceId: sourceId, configuredModelId: clearKey ? undefined : model?.id || undefined };
+  useEffect(() => {
+    if (editing) return;
+    const abort = new AbortController(); request.current = abort;
+    void fetch('/api/models/import-sources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: abort.signal }).then(async response => {
+      if (!response.ok) throw new Error();
+      const values = await response.json() as ModelImportSource[];
+      if (!abort.signal.aborted) { setSources(values); setStep(values.length ? 'source' : 'connection'); }
+    }).catch(() => { if (!abort.signal.aborted) setStep('connection'); });
+    return () => abort.abort();
+  }, [editing]);
+  useEffect(() => () => request.current?.abort(), []);
+  const post = async <T,>(path: string, body: unknown): Promise<T> => {
+    request.current?.abort();
+    const abort = new AbortController(); request.current = abort;
+    const response = await fetch(`/api/models/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: abort.signal });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || '请求失败，请检查连接');
+    return data;
+  };
+  const invalidate = () => { setSourceId(undefined); setVerified(false); setDiscovered([]); setListError(''); setError(''); };
+  const changeModel = (id: string) => { setModelId(id); setVerified(false); if (!name.trim() || name === shortName(modelId)) setName(shortName(id)); };
+  const connect = async (source?: ModelImportSource) => {
+    if (locked.current) return;
+    if (!source && !validUrl(baseUrl.trim())) { setError('请填写有效的 API 地址'); return; }
+    const value = source ? { baseUrl: source.baseUrl, apiType: source.apiType, authType: source.authType, importSourceId: source.id } : connection;
+    if (source) {
+      setSourceId(source.id); setBaseUrl(source.baseUrl); setApiType(source.apiType); setAuthType(source.authType); setKey(''); setClearKey(false);
+      setProvider(providers.find(p => p.url === source.baseUrl)?.name || '其他兼容服务'); changeModel(source.model || ''); setStep('model');
+    }
+    locked.current = true; setBusy(true); setError(''); setListError(''); setDiscovered([]);
+    try { const data = await post<{ models: string[] }>('discover', value); setDiscovered(data.models); if (!editing) setStep('model'); }
+    catch (e) { if (!request.current?.signal.aborted) setListError((e as Error).message); }
+    finally { locked.current = false; setBusy(false); }
+  };
+  const check = async () => {
+    if (locked.current) return;
+    if (!modelId.trim()) { setError('请选择或输入模型 ID'); return; }
+    locked.current = true; setBusy(true); setError('');
     try {
-      const result = await api<{models:string[]}>('/models/discover','POST',{baseUrl,apiKey:key,configuredModelId:clearKey ? undefined : model?.id || undefined});
-      if (request !== discoveryRequest.current) return;
-      setDiscovered(result.models);setShowModels(result.models.length>0);
-      if (!result.models.length) notify('没有可用模型');
-    } catch(e) { if(request===discoveryRequest.current) notify((e as Error).message); }
-    finally { if(request===discoveryRequest.current) setFetching(false); }
+      const result = await post<{ outputParameter?: string }>('check', { ...connection, model: modelId.trim() });
+      if (apiType === 'chat' && result.outputParameter) setRows(current => current.map(row => ['max_tokens','max_completion_tokens','max_output_tokens'].includes(row.key) ? { ...row, key: result.outputParameter! } : row));
+      setVerified(true); setStep('options');
+    }
+    catch (e) { if (!request.current?.signal.aborted) setError((e as Error).message); }
+    finally { locked.current = false; setBusy(false); }
   };
-  const values = rows.map(r=>{let value:ModelParameter['value'];try{value=JSON.parse(r.raw);}catch{value=r.raw;}return {key:r.key.trim(),value,enabled:r.enabled};});
-  const currentParameters=[...values,{key:'context_length',value:Number(contextLength),enabled:true}];
-  let invalid='';
-  if(!model?.fixed){
-    if(!name.trim() || !modelId.trim()) invalid='请填写模型 ID 和显示名称';
-    else {try{const url=new URL(baseUrl);if(!['http:','https:'].includes(url.protocol))throw new Error();}catch{invalid='请输入有效的 Base URL';}}
-    if(!invalid)invalid=values.some(p=>p.key==='context_length')?'上下文长度请在上方填写':validateParameters(currentParameters) || '';
-  }
-  const payload=model?.fixed?{fakeDelay:delay}:{name:name.trim(),baseUrl,apiKey:key,clearApiKey:clearKey,model:modelId.trim(),supportsImages:vision,parameters:currentParameters};
-  const save=async()=>{
-    if(saving)return;
-    if(invalid){if(options.current)options.current.open=true;setError(invalid);return;}
-    setSaving(true);setError('');
-    try{
-      if(model?.fixed)await api('/models/fake','PUT',payload);
-      else await api(model?.id?`/models/${model.id}`:'/models',model?.id?'PUT':'POST',payload);
-      await loadModels();await loadSettings();onBack();
-    }catch(e){setError((e as Error).message);}finally{setSaving(false);}
+  const values: ModelParameter[] = rows.map(row => { let value; try { value = JSON.parse(row.raw); } catch { value = row.raw; } return { key: row.key.trim(), value, enabled: row.enabled }; });
+  const currentParameters = [...values, { key: 'context_length', value: Number(contextLength), enabled: true }];
+  const save = async () => {
+    if (locked.current) return;
+    if (!model?.fixed) {
+      if (!editing && (!verified || step !== 'options')) return;
+      const invalid = !validUrl(baseUrl.trim()) ? '请填写有效的 API 地址' : !name.trim() || !modelId.trim() ? '请填写模型 ID 和显示名称' : validateParameters(currentParameters);
+      if (invalid) { setError(invalid); return; }
+    }
+    locked.current = true; setBusy(true); setError('');
+    try {
+      const payload = model?.fixed ? { fakeDelay: delay } : { name: name.trim(), ...connection, clearApiKey: clearKey, model: modelId.trim(), supportsImages: vision, parameters: currentParameters };
+      await api(model?.fixed ? '/models/fake' : model?.id ? `/models/${model.id}` : '/models', model?.id ? 'PUT' : 'POST', payload);
+      await loadModels(); await loadSettings(); onBack();
+    } catch (e) { setError((e as Error).message); }
+    finally { locked.current = false; setBusy(false); }
   };
-  return <form className="model-editor model-config-form" noValidate onSubmit={e=>{e.preventDefault();void save();}}>
-    <div className="model-editor-heading"><h2>{model?.fixed ? '模拟模式' : model ? '编辑模型' : '添加模型'}</h2></div>
-    {!model?.fixed && <p className="model-form-intro">选择服务商，填入密钥，再选择你要使用的模型。</p>}
-    <fieldset className="config-fields" disabled={saving}>{model?.fixed ? <label className="setting-row"><span className="setting-label">输出间隔</span><span className="setting-range"><input aria-label="模拟输出间隔" type="range" min="0" max="100" step="5" value={delay} onChange={e=>setDelay(Number(e.target.value))}/><span>{delay} ms</span></span></label> : <>
-      <h3 className="model-section-heading">连接服务商</h3>
-      <label className="setting-row"><span className="setting-label">服务商</span><select aria-label="服务商" value={provider} onChange={e=>{const selected=providers.find(p=>p.name===e.target.value)!;setProvider(selected.name);setBaseUrl(selected.url);resetDiscovery();}}>{providers.map(p=><option key={p.name}>{p.name}</option>)}</select></label>
-      <label className="setting-row"><span className="setting-label">API 地址</span><input aria-label="Base URL" type="url" required value={baseUrl} placeholder="https://你的服务商/v1" onChange={e=>{setBaseUrl(e.target.value);setProvider(providers.find(p=>p.url===e.target.value)?.name || '其他兼容服务');resetDiscovery();}}/></label>
-      <div className="setting-row"><label className="setting-label" htmlFor="model-api-key">API Key</label><div className="model-input-action"><input id="model-api-key" aria-label="API Key" type="password" autoComplete="off" value={key} onChange={e=>{setKey(e.target.value);setClearKey(false);resetDiscovery();}} placeholder={hasKey && !clearKey ? '已配置；留空保持' : provider === '本机服务（LM Studio）' ? '本机服务通常可留空' : '粘贴服务商提供的密钥'}/><button type="button" className="icon-button" aria-label="清除密钥" title="清除密钥" disabled={!key && (!hasKey || clearKey)} onClick={()=>{setKey('');setClearKey(true);resetDiscovery();}}><X size={14}/></button></div></div>
-      <h3 className="model-section-heading">选择模型</h3>
-      <p className="model-field-hint">点击右侧按钮读取列表，也可以直接填写模型 ID。</p>
-      <div className="setting-row"><label className="setting-label" htmlFor="model-id">模型 ID</label><div className="model-id-controls"><div className="model-input-action"><input id="model-id" aria-label="模型 ID" required value={modelId} onChange={e=>changeModel(e.target.value)} placeholder="输入或选择模型 ID"/><button type="button" className="icon-button" aria-label="读取模型列表" title="读取模型列表" aria-expanded={showModels} disabled={fetching || !baseUrl} onClick={()=>void readModels()}><RefreshCw size={14} className={fetching?'model-discovery-loading':''}/></button></div>{showModels && <select autoFocus aria-label="选择发现的模型" value="" onChange={e=>{changeModel(e.target.value);setShowModels(false);}}><option value="" disabled>选择模型</option>{discovered.map(id=><option key={id} value={id}>{id}</option>)}</select>}</div></div>
-      <details ref={options} className="model-options"><summary>模型选项<span>{name || '名称、上下文长度和图片输入'}</span></summary>
-      <label className="setting-row"><span className="setting-label">显示名称</span><input aria-label="显示名称" value={name} onChange={e=>setName(e.target.value)}/></label>
-      <label className="setting-row"><span className="setting-label">上下文长度</span><span className="model-context-input"><input aria-label="上下文长度" type="number" min="256" max="10000000" step="1" value={contextLength} onChange={e=>setContextLength(e.target.value)}/><span>token</span></span></label>
-      <p className="model-field-hint">默认 128000 token，请按模型实际容量调整，用于估算对话长度。</p>
-      <label className="setting-row"><span className="setting-label">支持图片输入</span><input className="setting-toggle" aria-label="支持图片输入" type="checkbox" checked={vision} onChange={e=>setVision(e.target.checked)}/></label>
-      </details>
-      <details className="model-advanced"><summary>高级设置</summary><table className="parameter-table"><thead><tr><th>启用</th><th>参数</th><th>值</th><th/></tr></thead><tbody>{rows.map((r,i)=><tr key={i}><td><input type="checkbox" aria-label={`启用参数 ${i+1}`} checked={r.enabled} onChange={e=>setRows(rows.map((row,j)=>j===i?{...row,enabled:e.target.checked}:row))}/></td><td><input aria-label={`参数名 ${i+1}`} value={r.key} onChange={e=>setRows(rows.map((row,j)=>j===i?{...row,key:e.target.value}:row))}/></td><td><input aria-label={`参数值 ${i+1}`} value={r.raw} onChange={e=>setRows(rows.map((row,j)=>j===i?{...row,raw:e.target.value}:row))}/></td><td><button type="button" className="icon-button" aria-label={`删除参数 ${i+1}`} onClick={()=>setRows(rows.filter((_,j)=>i!==j))}><Trash2 size={13}/></button></td></tr>)}</tbody></table><button type="button" className="secondary-button" onClick={()=>setRows([...rows,{key:'',raw:'',enabled:true}])}><Plus size={13}/>添加参数</button><p className="parameter-hint">仅启用的参数发送给模型。</p></details>
-    </>}
-    </fieldset>{error&&<p className="config-error" role="alert">{error}</p>}
-    <div className="model-editor-actions"><button type="button" className="secondary-button" disabled={saving} onClick={onBack}>取消</button><button type="submit" className="primary-button" disabled={saving}>{saving?'保存中…':'保存模型'}</button></div>
+  const steps = ['连接服务', '选择模型', '模型选项'], index = step === 'model' ? 1 : step === 'options' ? 2 : 0;
+  const connectionFields = <>
+    <label className="setting-row"><span>供应商</span><select aria-label="供应商" value={provider} onChange={event => {
+      const selected = providers.find(p => p.name === event.target.value)!; setProvider(selected.name); setBaseUrl(selected.url); setApiType(selected.api); setAuthType(undefined); invalidate();
+    }}><option value="" disabled>选择供应商</option>{providers.map(p => <option key={p.name}>{p.name}</option>)}</select></label>
+    <label className="setting-row"><span>API 地址</span><input aria-label="Base URL" type="url" value={baseUrl} placeholder="https://你的服务商/v1" onChange={event => { setBaseUrl(event.target.value); invalidate(); }}/></label>
+    <label className="setting-row"><span>接口类型</span><select aria-label="接口类型" value={apiType} onChange={event => { setApiType(event.target.value as ApiType); setAuthType(undefined); invalidate(); }}>{Object.entries(apiLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+    {validUrl(baseUrl.trim()) && <div className="setting-row"><label htmlFor="model-api-key">API Key</label><div className="model-input-action"><input id="model-api-key" aria-label="API Key" type="password" autoComplete="off" value={key} onChange={event => { setKey(event.target.value); setClearKey(false); invalidate(); }} placeholder={sourceId ? '已从配置读取' : hasKey && !clearKey ? '已配置；留空保持' : '粘贴密钥，本机服务可留空'}/><button type="button" className="icon-button" aria-label="清除密钥" disabled={!key && !sourceId && (!hasKey || clearKey)} onClick={() => { setKey(''); setClearKey(true); invalidate(); }}><X size={14}/></button></div></div>}
+    {apiType === 'messages' && <label className="setting-row"><span>密钥发送方式</span><select aria-label="密钥发送方式" value={authType || 'api-key'} onChange={event => { setAuthType(event.target.value as ModelConfig['authType']); invalidate(); }}><option value="api-key">x-api-key（官方）</option><option value="bearer">Bearer（部分中转服务）</option></select></label>}
+  </>;
+  const updateRow = (i: number, update: Partial<Row>) => setRows(rows.map((row, j) => i === j ? { ...row, ...update } : row));
+  const outputRow = rows.findIndex(row => ['max_tokens','max_output_tokens','max_completion_tokens'].includes(row.key));
+  return <form className="model-editor model-config-form model-wizard" noValidate onSubmit={event => { event.preventDefault(); if (editing || step === 'options') void save(); else if (step === 'connection') void connect(); else if (step === 'model') void check(); }}>
+    <div className="model-editor-heading"><h2>{model?.fixed ? '模拟模式' : editing ? '编辑模型' : '添加模型'}</h2></div>
+    {!editing && step !== 'loading' && step !== 'source' && <ol className="model-wizard-steps" aria-label="配置进度">{steps.map((label, i) => <li key={label} aria-current={i === index ? 'step' : undefined}><span>{i < index ? <Check size={12}/> : i + 1}</span>{label}</li>)}</ol>}
+    {step === 'loading' ? <p className="model-form-intro" role="status">正在查找 Claude Code 和 Codex 配置…</p> : <fieldset className="config-fields" disabled={busy}>
+      {model?.fixed ? <label className="setting-row"><span>输出间隔</span><span className="setting-range"><input aria-label="模拟输出间隔" type="range" min="0" max="100" step="5" value={delay} onChange={event => setDelay(Number(event.target.value))}/><span>{delay} ms</span></span></label> : <>
+        {step === 'source' && <div className="model-import-options"><p className="model-form-intro">找到已有配置，选择一个即可继续。</p>{sources.map(source => <button type="button" className="model-import-choice" key={source.id} onClick={() => void connect(source)}><div><strong>从 {source.source} 导入</strong><span>{source.baseUrl}</span><small>{apiLabels[source.apiType]}{source.model ? ` · ${source.model}` : ''}</small></div><ArrowRight size={16}/></button>)}<button type="button" className="secondary-button" onClick={() => { setStep('connection'); setError(''); }}>手动填写</button></div>}
+        {(step === 'connection' || editing) && connectionFields}
+        {(step === 'model' || editing) && <>
+          <div className="model-selection-heading"><p className="model-form-intro">选择列表中的模型，或直接输入模型 ID。</p><button type="button" className="icon-button" title="读取模型列表" aria-label="读取模型列表" onClick={() => void connect()}><RefreshCw size={14}/></button></div>
+          {!!discovered.length && <><input className="model-filter" aria-label="筛选模型" placeholder={`筛选 ${discovered.length} 个模型`} value={filter} onChange={event => setFilter(event.target.value)}/><div className="model-choice-list" role="group" aria-label="可用模型">{discovered.filter(id => id.toLowerCase().includes(filter.toLowerCase())).map(id => <button type="button" key={id} aria-pressed={modelId === id} onClick={() => changeModel(id)}><span>{id}</span>{modelId === id && <Check size={14}/>}</button>)}</div></>}
+          <label className="setting-row"><span>模型 ID</span><input aria-label="模型 ID" value={modelId} placeholder="输入模型 ID" onChange={event => changeModel(event.target.value)}/></label>
+          {!editing && <p className="model-field-hint">下一步将发送一条简短测试请求，可能产生少量 API 费用。</p>}
+        </>}
+        {(step === 'options' || editing) && <>
+          {!editing && <p className="model-check-success"><Check size={14}/>模型连接正常</p>}
+          <label className="setting-row"><span>显示名称</span><input aria-label="显示名称" maxLength={100} value={name} onChange={event => setName(event.target.value)}/></label>
+          <label className="setting-row"><span>支持图片输入</span><input className="setting-toggle" aria-label="支持图片输入" type="checkbox" checked={vision} onChange={event => setVision(event.target.checked)}/></label>
+          <label className="setting-row"><span>上下文长度</span><span className="model-context-input"><input aria-label="上下文长度" type="number" min={256} max={10000000} value={contextLength} onChange={event => setContextLength(event.target.value)}/><span>token</span></span></label>
+          <p className="model-field-hint">按模型实际容量填写，用于估算对话长度；图片能力需按模型说明选择。</p>
+          {outputRow >= 0 && <label className="setting-row"><span>最长输出</span><span className="model-context-input"><input aria-label="最长输出" type="number" min={1} value={rows[outputRow].raw} onChange={event => updateRow(outputRow, { raw: event.target.value })}/><span>token</span></span></label>}
+          <details className="model-advanced"><summary>高级参数</summary><p className="model-field-hint">仅启用的参数会发送；输出上限按接口转换。思考等参数请按服务商说明配置。</p><table className="parameter-table"><thead><tr><th>启用</th><th>参数</th><th>值</th><th/></tr></thead><tbody>{rows.map((row, i) => <tr key={i}><td><input type="checkbox" aria-label={`启用参数 ${i+1}`} checked={row.enabled} onChange={event => updateRow(i, { enabled: event.target.checked })}/></td><td><input aria-label={`参数名 ${i+1}`} value={row.key} onChange={event => updateRow(i, { key: event.target.value })}/></td><td><input aria-label={`参数值 ${i+1}`} value={row.raw} onChange={event => updateRow(i, { raw: event.target.value })}/></td><td><button type="button" className="icon-button" aria-label={`删除参数 ${i+1}`} onClick={() => setRows(rows.filter((_, j) => j !== i))}><Trash2 size={13}/></button></td></tr>)}</tbody></table><button type="button" className="secondary-button" onClick={() => setRows([...rows, { key:'', raw:'', enabled:true }])}><Plus size={13}/>添加参数</button></details>
+        </>}
+      </>}
+    </fieldset>}
+    {listError && <p className="config-error" role="alert">{listError}</p>}
+    {listError && step === 'connection' && <button type="button" className="secondary-button" onClick={() => { setStep('model'); setError(''); }}>手动填写模型 ID</button>}
+    {error && <p className="config-error" role="alert">{error}</p>}
+    <div className="model-editor-actions">
+      {!editing && step !== 'loading' && step !== 'source' && (step !== 'connection' || sources.length > 0) && <button type="button" className="secondary-button" disabled={busy} onClick={() => { setError(''); setListError(''); setStep(step === 'options' ? 'model' : step === 'model' ? 'connection' : 'source'); }}><ChevronLeft size={14}/>上一步</button>}
+      <button type="button" className="secondary-button" disabled={busy && (editing || step === 'options')} onClick={onBack}>取消</button>
+      {step !== 'source' && step !== 'loading' && <button type="submit" className="primary-button" disabled={busy || step === 'connection' && !validUrl(baseUrl.trim()) || step === 'model' && !modelId.trim()}>{busy ? (step === 'model' ? '正在检测…' : '处理中…') : editing || step === 'options' ? '保存模型' : '下一步'}</button>}
+    </div>
   </form>;
 }

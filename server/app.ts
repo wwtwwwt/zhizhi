@@ -10,15 +10,18 @@ import { streamChat } from './providers/chat';
 import { importDocument, convertPaper } from './documents';
 import fakePrompts from '../prompts/fake.json';
 import { fixture } from './providers/fake';
+import { ModelImportCache, type ImportCandidate } from './model-import';
+import { discoverModels, checkModel } from './model-connection';
 
 const requestId = z.string().uuid();
 const question = z.string().trim().min(1, '请输入问题').max(30_000);
 const idParam = (req: Request) => String(req.params.id);
-export function createApp(store: Store, options: { releaseVersion?: string; paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
+export function createApp(store: Store, options: { readModelImports?: () => Promise<ImportCandidate[]>; releaseVersion?: string; paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
   const app = express();
   const updates = new UpdateChecker(store, options.releaseVersion);
   const active = new Map<string, AbortController>();
   const activeDrafts = new Map<string, () => string>();
+  const modelImports = new ModelImportCache(options.readModelImports);
   app.disable('x-powered-by');
   app.use('/api', (req, res, next) => {
     if (options.apiToken && req.get('x-zhizhi-token') !== options.apiToken && req.get('authorization') !== `Bearer ${options.apiToken}`) {
@@ -36,28 +39,47 @@ export function createApp(store: Store, options: { releaseVersion?: string; pape
     next();
   });
   const parameters = z.array(z.object({ key: z.string().min(1).max(100), value: z.json(), enabled: z.boolean() })).max(50);
-  const modelInput = z.object({ name: z.string().trim().min(1).max(100), baseUrl: z.string().url().refine(s => /^https?:\/\//.test(s)), model: z.string().trim().min(1).max(200), supportsImages: z.boolean(), parameters, apiKey: z.string().max(10000).optional(), clearApiKey: z.boolean().optional() });
+  const connectionInput = z.object({ baseUrl: z.string().trim().url().refine(s => { const url = new URL(s); return ['http:','https:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash; }), apiType: z.enum(['chat','responses','messages']).default('chat'), authType: z.enum(['bearer','api-key']).optional(), apiKey: z.string().max(10000).optional(), configuredModelId: z.string().optional(), importSourceId: z.string().optional() });
+  const modelInput = connectionInput.omit({ configuredModelId: true }).extend({ name: z.string().trim().min(1).max(100), model: z.string().trim().min(1).max(200), supportsImages: z.boolean(), parameters, clearApiKey: z.boolean().optional() });
+  const credentials = (d: z.infer<typeof connectionInput>) => {
+    if (d.apiKey) return d.apiKey;
+    if (d.importSourceId) {
+      try { return modelImports.resolve(d.importSourceId, d.baseUrl, d.apiType, d.authType); }
+      catch(e) { throw new AppError(400, 'IMPORT_EXPIRED', (e as Error).message); }
+    }
+    return d.configuredModelId ? store.models.key(d.configuredModelId) : '';
+  };
+  const saveModel = (d: z.infer<typeof modelInput>, id?: string) => {
+    const { importSourceId, ...value } = d;
+    return store.models.save({ ...value, id, apiKey: d.clearApiKey ? undefined : credentials(d), provider: 'openai' });
+  };
   const attachmentInput = z.array(z.object({ name: z.string().min(1).max(250), kind: z.enum(['text','image']), mime: z.string().max(100), data: z.string().max(8 * 1024 * 1024) })).max(6).default([]);
   const sendOptions = { modelId: z.string().max(100).optional(), attachments: attachmentInput };
   app.get('/api/documents/picker', (_req,res) => res.json({available:!!options.pickDocument}));
   app.post('/api/documents/picker', async (_req,res) => res.json(options.pickDocument ? await options.pickDocument() : null));
   app.get('/api/models', (_req, res) => res.json(store.models.list()));
-  app.post('/api/models', (req, res) => res.json(store.models.save({ ...modelInput.parse(req.body), provider: 'openai' })));
+  app.post('/api/models', (req, res) => res.json(saveModel(modelInput.parse(req.body))));
   app.put('/api/models/:id', (req, res) => {
     if (idParam(req) === 'fake') { const { fakeDelay } = z.object({ fakeDelay: z.number().int().min(0).max(250) }).parse(req.body); store.saveSettings({ ...store.settings(), fakeDelay }); res.json(store.models.get('fake')); }
-    else { store.models.get(idParam(req)); res.json(store.models.save({ ...modelInput.parse(req.body), id: idParam(req), provider: 'openai' })); }
+    else { store.models.get(idParam(req)); res.json(saveModel(modelInput.parse(req.body), idParam(req))); }
   });
   app.delete('/api/models/:id', (req, res) => { store.models.delete(idParam(req)); res.json({ ok: true }); });
+  app.post('/api/models/import-sources', async (_req, res) => { res.set('Cache-Control','no-store'); res.json(await modelImports.list()); });
   app.post('/api/models/discover', async (req, res) => {
-    const d = z.object({ baseUrl: z.string().url().refine(s => /^https?:\/\//.test(s)), apiKey: z.string().max(10000).optional(), configuredModelId: z.string().optional() }).parse(req.body);
-    const key = d.apiKey || (d.configuredModelId ? store.models.key(d.configuredModelId) : '');
+    const d = connectionInput.parse(req.body), key = credentials(d);
+    const abort = new AbortController(); const close = () => { if (!res.writableEnded) abort.abort(); }; res.once('close',close);
+    try { res.json({ models: await discoverModels(d.baseUrl, d.apiType, key, AbortSignal.any([abort.signal, AbortSignal.timeout(20000)]), d.authType) }); }
+    catch (e) { throw e instanceof AppError ? e : new AppError(502, 'MODEL_LIST_ERROR', '无法读取模型列表，请检查连接；也可手动填写模型 ID'); }
+    finally { res.off('close',close); }
+  });
+  app.post('/api/models/check', async (req, res) => {
+    const d = connectionInput.extend({ model: z.string().trim().min(1).max(200) }).parse(req.body), key = credentials(d);
+    const abort = new AbortController(); const close = () => { if (!res.writableEnded) abort.abort(); }; res.once('close',close);
     try {
-      const response = await fetch(`${d.baseUrl.replace(/\/+$/, '')}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(20000) });
-      if (!response.ok) throw new AppError(502, 'MODEL_LIST_ERROR', `读取模型列表失败（${response.status}）`);
-      const data = await response.json() as { data?: { id?: string }[] };
-      if (!Array.isArray(data.data)) throw new AppError(502, 'MODEL_LIST_ERROR', '服务未返回有效的模型列表');
-      res.json({ models: [...new Set(data.data.map(m => m.id).filter((v): v is string => typeof v === 'string' && !!v))].sort().slice(0, 5000) });
-    } catch (e) { throw e instanceof AppError ? e : new AppError(502, 'MODEL_LIST_ERROR', '无法读取模型列表，请检查地址和连接'); }
+      const outputParameter = await checkModel({ id:'check', provider:'openai', name:'check', ...d, supportsImages:false, parameters:[{ key:'max_tokens', value:256, enabled:true }] }, key, AbortSignal.any([abort.signal, AbortSignal.timeout(60000)]));
+      res.json({ ok:true, outputParameter });
+    } catch(e) { throw e instanceof AppError ? e : new AppError(502, 'MODEL_CHECK_FAILED', '模型测试失败，请检查接口类型、模型 ID 及连接'); }
+    finally { res.off('close',close); }
   });
   app.get('/api/streams/:id/context', (req, res) => res.json(store.budget(idParam(req), typeof req.query.sourceNodeId === 'string' ? req.query.sourceNodeId : undefined)));
   app.get('/api/attachments/:id', (req, res) => { const file = store.need('attachments', idParam(req)); res.set({ 'Content-Type': file.mime, 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' }); res.send(Buffer.from(file.data)); });

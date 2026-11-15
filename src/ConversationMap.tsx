@@ -27,6 +27,11 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const contentPreview = useRef<HTMLDivElement>(null);
+  const [hoverPreview, setHoverPreview] = useState<{ message: MapMessage; left: number; top: number } | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hideHoverPreview = () => { clearTimeout(hoverTimer.current); setHoverPreview(null); };
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+  useEffect(hideHoverPreview, [open, selection, data]);
   const viewport = useRef<HTMLDivElement>(null);
   const splitBody = useRef<HTMLDivElement>(null);
   const split = useMapSplitResize(splitBody, open && !!selection);
@@ -140,6 +145,15 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
     setJumping(true);
     void onJump(message, data, hit).finally(() => setJumping(false));
   };
+  const showHoverPreview = (message: MapMessage, x: number, y: number, delay = 160) => {
+    hideHoverPreview();
+    if (!open || selectedMessage) return;
+    const show = () => setHoverPreview({ message, left: Math.max(8, Math.min(x + 302 <= innerWidth - 8 ? x + 32 : x - 302, innerWidth - 278)), top: Math.max(8, y + 264 <= innerHeight - 8 ? y + 28 : y - 264) });
+    if (delay) hoverTimer.current = setTimeout(show, delay); else show();
+  };
+  const hoverBranch = hoverPreview && branches.get(hoverPreview.message.streamId);
+  const hoverQuote = hoverBranch?.parentMessageId === hoverPreview?.message.parentId ? hoverBranch?.anchor.selected_text : undefined;
+  const hoverText = hoverPreview && Object.values(state.jobs).find(job => job.messageId === hoverPreview.message.id)?.text;
   return <div ref={layer} className={`conversation-map-layer ${open ? 'open' : ''}`} style={{ top: headerHeight }} aria-hidden={!open} inert={!open}>
     <button className={`conversation-map-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''}`} tabIndex={-1} aria-label="关闭对话地图" onClick={onClose}/>
     <section id="conversation-map-panel" className="conversation-map-panel" aria-label="对话地图">
@@ -147,14 +161,14 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
       {query.trim() && <><output className="map-search-count" aria-live="polite">{searching ? '搜索中…' : searchError || (searchHits.length ? `${resultIndex + 1} / ${searchHits.length}` : '无结果')}</output><div className="map-search-actions"><button aria-label="上一个搜索结果" disabled={!searchHits.length} onClick={() => moveResult(-1)}><ChevronUp size={15}/></button><button aria-label="下一个搜索结果" disabled={!searchHits.length} onClick={() => moveResult(1)}><ChevronDown size={15}/></button><button aria-label="打开搜索结果" disabled={!currentHit || jumping} onClick={() => { const message = currentHit && points.get(currentHit.messageId); if (message) jump(message, currentHit); }}><ArrowUpRight size={15}/></button></div></>}
     </div>, searchHost)}
     <div ref={splitBody} className={`conversation-map-body ${selectedMessage ? 'has-preview' : ''} ${split.resizing ? 'resizing' : ''}`} style={{ '--map-split': `${split.ratio * 100}%`, '--map-preview-width': `${split.width * (1 - split.ratio)}px` } as CSSProperties}>
-    <div className="conversation-map-clip"><div className="conversation-map-scroll" ref={viewport}>
+    <div className="conversation-map-clip"><div className="conversation-map-scroll" ref={viewport} onScroll={hideHoverPreview} onMouseLeave={hideHoverPreview}>
       {error ? <p className="conversation-map-status" role="alert">{error}</p> : !layout ? <p className="conversation-map-status" role="status">{loading ? '正在读取地图…' : ''}</p> : !layout.nodes.length ? <p className="conversation-map-status">暂无消息</p> : <div className="conversation-map-stage"><div className={`conversation-map-canvas ${query.trim() && !searching && !searchError ? 'searching' : ''}`} style={{ width: layout.width, height: layout.height }}>
         <svg width={layout.width} height={layout.height} aria-hidden="true">{layout.nodes.map(node => {
           const parent = node.parentId ? points.get(node.parentId) : undefined;
           if (!parent) return null;
           return <path key={node.id} d={parent.x === node.x ? `M${parent.x} ${parent.y}V${node.y}` : `M${parent.x} ${parent.y}H${node.x}V${node.y}`}/>;
         })}</svg>
-        {layout.nodes.map(node => <button key={node.id} className={`conversation-map-node map-node-${node.kind} ${currentHit?.messageId === node.id ? 'map-search-current' : ''}`} data-map-message={node.id} data-search-match={matches.has(node.id) || undefined} style={{ left: node.x, top: node.y }} aria-label={`${kindLabels[node.kind]}：${node.preview.slice(0, 60) || '生成中'}`} aria-current={selectedId === node.id ? 'location' : undefined} aria-pressed={selection?.id === node.id} disabled={jumping} onClick={() => setSelection({ id: node.id })} onDoubleClick={() => jump(node, selection?.id === node.id ? selection.hit : undefined)}><span/></button>)}
+        {layout.nodes.map(node => <button key={node.id} className={`conversation-map-node map-node-${node.kind} ${currentHit?.messageId === node.id ? 'map-search-current' : ''}`} data-map-message={node.id} data-search-match={matches.has(node.id) || undefined} style={{ left: node.x, top: node.y }} aria-label={`${kindLabels[node.kind]}：${node.preview.slice(0, 60) || '生成中'}`} aria-current={selectedId === node.id ? 'location' : undefined} aria-pressed={selection?.id === node.id} disabled={jumping} onFocus={event => { const bounds = event.currentTarget.getBoundingClientRect(); showHoverPreview(node, bounds.right, bounds.bottom, 0); }} onBlur={hideHoverPreview} onMouseLeave={hideHoverPreview} onClick={() => { hideHoverPreview(); setSelection({ id: node.id }); }} onDoubleClick={() => jump(node, selection?.id === node.id ? selection.hit : undefined)}><span onMouseEnter={event => showHoverPreview(node, event.clientX, event.clientY)} onMouseLeave={hideHoverPreview}/></button>)}
       </div></div>}
     </div></div>
     <div className="map-preview-pane" inert={!selectedMessage} aria-hidden={!selectedMessage}>
@@ -175,5 +189,6 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
     <div className={`map-split-handle ${split.ready ? 'ready' : ''}`} role="separator" aria-label="调整地图与预览比例" aria-orientation="vertical" aria-valuemin={Math.round(split.minimum * 100)} aria-valuemax={Math.round(split.maximum * 100)} aria-valuenow={Math.round(split.ratio * 100)} tabIndex={selectedMessage ? 0 : -1} aria-hidden={!selectedMessage} onPointerEnter={split.enter} onPointerLeave={split.leave} onPointerDown={split.start} onPointerMove={split.move} onPointerUp={split.stop} onPointerCancel={split.stop} onLostPointerCapture={split.stop} onKeyDown={event => { if (split.keyboard(event.key)) event.preventDefault(); }}/>
     </div>
     </section>
+    {open && !selectedMessage && hoverPreview && createPortal(<div className="conversation-map-preview" role="tooltip" style={{ left: hoverPreview.left, top: hoverPreview.top }}><span>{kindLabels[hoverPreview.message.kind]}</span>{hoverQuote && <blockquote className="map-preview-quote"><span>引用</span><p>{hoverQuote}</p></blockquote>}<div>{hoverText || hoverPreview.message.preview || '正在生成…'}</div></div>, document.body)}
   </div>;
 }

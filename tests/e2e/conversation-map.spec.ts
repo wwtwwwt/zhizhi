@@ -68,8 +68,7 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   await expect(rootNode).toHaveAttribute('aria-current', 'location');
   const canvasBefore = await panel.locator('.conversation-map-canvas').boundingBox();
   await rootNode.hover();
-  await page.waitForTimeout(200);
-  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(page.getByRole('tooltip')).toContainText('主对话的长文档');
   expect(await panel.locator('svg path').evaluateAll(paths => paths.every(path => !/[QC]/.test(path.getAttribute('d') || '')))).toBe(true);
   const initialSelection = await rootNode.evaluate(async element => {
     element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -79,6 +78,7 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   expect(initialSelection).toBe('true');
   const detail = panel.getByRole('complementary', { name: '消息内容预览' });
   await expect(detail).toContainText('主对话的长文档');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   const canvasAfter = await panel.locator('.conversation-map-canvas').boundingBox();
   expect(canvasAfter!.width).toBe(canvasBefore!.width);
@@ -130,6 +130,9 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   await panel.locator(`[data-map-message="${noteMessage.id}"]`).click();
   await expect(detail.locator('.map-detail-quote')).toContainText(branchSource.selection_text.slice(0, 2));
   await expect(detail.locator('strong')).toHaveText('深层笔记内容');
+  await panel.locator(`[data-map-message="${branchQuestion.id}"]`).hover();
+  await page.waitForTimeout(200);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   const branchNode = panel.locator(`[data-map-message="${branchQuestion.id}"]`);
   const instantSelection = await branchNode.evaluate(async element => {
     element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -142,6 +145,9 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   expect(notePreviewRequests).toBe(1);
   await detail.getByRole('button', { name: '关闭消息预览' }).click();
   await expect(detail).toHaveCount(0);
+  await panel.locator(`[data-map-message="${noteMessage.id}"]`).hover();
+  await expect(page.getByRole('tooltip')).toContainText('深层笔记内容');
+  await expect(page.locator('.map-preview-quote')).toContainText(branchSource.selection_text.slice(0, 2));
   const search = page.getByRole('searchbox', { name: '搜索对话地图' });
   await expect(page.locator('.topbar-map-controls').getByRole('searchbox')).toBeVisible();
   await expect(panel.locator('.conversation-map-toolbar')).toHaveCount(0);

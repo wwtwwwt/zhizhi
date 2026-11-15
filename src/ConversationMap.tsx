@@ -27,14 +27,12 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState('');
   const contentPreview = useRef<HTMLDivElement>(null);
-  const clickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const viewport = useRef<HTMLDivElement>(null);
   const splitBody = useRef<HTMLDivElement>(null);
   const split = useMapSplitResize(splitBody, open && !!selection);
   const layer = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(43);
-  useEffect(() => () => clearTimeout(clickTimer.current), []);
-  useEffect(() => { clearTimeout(clickTimer.current); setSelection(null); setMessagePreview(null); }, [sessionId, open]);
+  useEffect(() => { setSelection(null); setMessagePreview(null); }, [sessionId, open]);
   useLayoutEffect(() => {
     const header = layer.current?.parentElement?.querySelector<HTMLElement>('.topbar');
     if (!header) return;
@@ -126,7 +124,7 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
     return () => { clearTimeout(timer); abort.abort(); };
   }, [query, sessionId, open, data]);
   useEffect(() => {
-    if (open && currentHit) { clearTimeout(clickTimer.current); setSelection({ id: currentHit.messageId, hit: currentHit }); }
+    if (open && currentHit) { setSelection({ id: currentHit.messageId, hit: currentHit }); }
   }, [open, currentHit]);
   useEffect(() => {
     if (open && selection && (selection.hit || !hadPreview.current)) centerNode(selection.id);
@@ -139,15 +137,8 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
   };
   const jump = (message: MapMessage, hit?: MapSearchHit) => {
     if (!data || jumping) return;
-    clearTimeout(clickTimer.current); setJumping(true);
+    setJumping(true);
     void onJump(message, data, hit).finally(() => setJumping(false));
-  };
-  const selectNode = (message: MapMessage) => {
-    clearTimeout(clickTimer.current);
-    // Only the initial opening moves the clicked node. Once open, switch
-    // immediately and keep the map still so a second click can navigate.
-    if (selectedMessage) setSelection({ id: message.id });
-    else clickTimer.current = setTimeout(() => setSelection({ id: message.id }), 280);
   };
   return <div ref={layer} className={`conversation-map-layer ${open ? 'open' : ''}`} style={{ top: headerHeight }} aria-hidden={!open} inert={!open}>
     <button className={`conversation-map-backdrop ${state.settings?.blurBackdrop ? 'blurred' : ''}`} tabIndex={-1} aria-label="关闭对话地图" onClick={onClose}/>
@@ -163,17 +154,14 @@ export function ConversationMap({ sessionId, open, selectedId, searchHost, onClo
           if (!parent) return null;
           return <path key={node.id} d={parent.x === node.x ? `M${parent.x} ${parent.y}V${node.y}` : `M${parent.x} ${parent.y}H${node.x}V${node.y}`}/>;
         })}</svg>
-        {layout.nodes.map(node => <button key={node.id} className={`conversation-map-node map-node-${node.kind} ${currentHit?.messageId === node.id ? 'map-search-current' : ''}`} data-map-message={node.id} data-search-match={matches.has(node.id) || undefined} style={{ left: node.x, top: node.y }} aria-label={`${kindLabels[node.kind]}：${node.preview.slice(0, 60) || '生成中'}`} aria-current={selectedId === node.id ? 'location' : undefined} aria-pressed={selection?.id === node.id} disabled={jumping} onClick={event => {
-          if (event.detail === 0) { clearTimeout(clickTimer.current); setSelection({ id: node.id }); }
-          else selectNode(node);
-        }} onDoubleClick={() => jump(node, selection?.id === node.id ? selection.hit : undefined)}><span/></button>)}
+        {layout.nodes.map(node => <button key={node.id} className={`conversation-map-node map-node-${node.kind} ${currentHit?.messageId === node.id ? 'map-search-current' : ''}`} data-map-message={node.id} data-search-match={matches.has(node.id) || undefined} style={{ left: node.x, top: node.y }} aria-label={`${kindLabels[node.kind]}：${node.preview.slice(0, 60) || '生成中'}`} aria-current={selectedId === node.id ? 'location' : undefined} aria-pressed={selection?.id === node.id} disabled={jumping} onClick={() => setSelection({ id: node.id })} onDoubleClick={() => jump(node, selection?.id === node.id ? selection.hit : undefined)}><span/></button>)}
       </div></div>}
     </div></div>
     <div className="map-preview-pane" inert={!selectedMessage} aria-hidden={!selectedMessage}>
     {selectedMessage && <aside className="map-message-detail" aria-label="消息内容预览">
       <header><span>{kindLabels[selectedMessage.kind]}</span><div>
         <button className="icon-button" aria-label="跳转到消息" title="跳转到消息" disabled={jumping} onClick={() => jump(selectedMessage, selection?.hit)}><ArrowUpRight size={15}/></button>
-        <button className="icon-button" aria-label="关闭消息预览" title="关闭消息预览" onClick={() => { clearTimeout(clickTimer.current); setSelection(null); }}><X size={15}/></button>
+        <button className="icon-button" aria-label="关闭消息预览" title="关闭消息预览" onClick={() => { setSelection(null); }}><X size={15}/></button>
       </div></header>
       <div className="map-message-detail-content" ref={contentPreview}>
         {selectedQuote && <blockquote className={`map-detail-quote ${selection?.hit?.quote ? 'map-preview-match' : ''}`}><span>引用</span><p>{selectedQuote}</p></blockquote>}

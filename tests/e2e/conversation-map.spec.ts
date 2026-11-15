@@ -71,7 +71,12 @@ test('map panel opens below topbar, previews dots and navigates root and nested 
   await page.waitForTimeout(200);
   await expect(page.getByRole('tooltip')).toHaveCount(0);
   expect(await panel.locator('svg path').evaluateAll(paths => paths.every(path => !/[QC]/.test(path.getAttribute('d') || '')))).toBe(true);
-  await rootNode.click();
+  const initialSelection = await rootNode.evaluate(async element => {
+    element.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    return element.getAttribute('aria-pressed');
+  });
+  expect(initialSelection).toBe('true');
   const detail = panel.getByRole('complementary', { name: '消息内容预览' });
   await expect(detail).toContainText('主对话的长文档');
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');

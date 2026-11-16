@@ -41,7 +41,7 @@ export function ModelManager() {
 
 function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => void }) {
   const editing = !!model?.id;
-  const parameters = model?.parameters || defaultParameters().map(parameter => parameter.key === 'temperature' ? { ...parameter, enabled: false } : parameter);
+  const parameters = model?.parameters || defaultParameters().map(parameter => parameter.key === 'temperature' ? { ...parameter, enabled: false } : parameter.key === 'context_length' ? { ...parameter, value: 256000 } : parameter);
   const [step, setStep] = useState<Step>(editing ? 'options' : 'loading');
   const [sources, setSources] = useState<ModelImportSource[]>([]), [sourceId, setSourceId] = useState<string>();
   const [provider, setProvider] = useState(providers.find(p => p.url === model?.baseUrl)?.name || '');
@@ -49,8 +49,8 @@ function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => voi
   const [authType, setAuthType] = useState<ModelConfig['authType']>(model?.authType);
   const [key, setKey] = useState(''), [clearKey, setClearKey] = useState(false);
   const [modelId, setModelId] = useState(model?.model || ''), [name, setName] = useState(model?.name || '');
-  const [vision, setVision] = useState(model?.supportsImages || false);
-  const [contextLength, setContextLength] = useState(String(parameters.find(p => p.key === 'context_length' && p.enabled)?.value || 128000));
+  const [vision, setVision] = useState(model?.supportsImages ?? true);
+  const [contextLength, setContextLength] = useState(String(parameters.find(p => p.key === 'context_length' && p.enabled)?.value || 256000));
   const [rows, setRows] = useState<Row[]>(parameters.filter(p => p.key !== 'context_length').map(p => ({ key: p.key, raw: typeof p.value === 'string' ? p.value : JSON.stringify(p.value), enabled: p.enabled })));
   const [discovered, setDiscovered] = useState<string[]>([]), [filter, setFilter] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [listError, setListError] = useState('');

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store';
 import { createApp } from '../server/app';
-import { importDocument, paperUrl } from '../server/documents';
+import { convertPaper, importDocument, paperUrl } from '../server/documents';
 import { nodeTree, splitMarkdown } from '../shared/markdown';
 import { withoutImages } from '../shared/documents';
 
@@ -84,4 +84,18 @@ test('HTML document images resolve local resources and never enter model context
     expect(message.slots.some(s=>s.node.selection_text==='Author∗')).toBe(true);
     expect(withoutImages(message.content_markdown)).not.toContain('/api/document-resources/');
   } finally {store.db.close();rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test('paper converter truncated inline logo does not reject valid body figures; normal imports remain strict',async()=>{
+  const converter=createServer((_req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({markdown:'# Paper\n\n正文\n\n![Figure](2509.16865v1/figure/framework.png)\n\n![[LOGO]](data:image/png;base64...)\n\n![icon](data:image/png;base64,…)'}));});
+  const endpoint=await listen(converter),dir=mkdtempSync(join(tmpdir(),'learn-paper-logo-')),store=new Store(dir);
+  try{
+    const doc=await convertPaper('http://arxiv.org/pdf/2509.16865v1',endpoint);
+    expect(doc.markdown).not.toContain('data:image');expect(doc.markdown).toContain('[LOGO]');
+    const result=importDocument(store,doc),message=store.stream(result.root_stream_id).messages[0];
+    expect(message.slots.filter(s=>s.node.block_type==='image')).toHaveLength(1);
+    expect(message.content_markdown).toContain('https://arxiv.org/html/2509.16865v1/figure/framework.png');
+    expect(()=>importDocument(store,{name:'bad.md',markdown:'![x](data:image/png;base64...)',resources:[]})).toThrow('内嵌图片');
+  }finally{await close(converter);store.db.close();rmSync(dir,{recursive:true,force:true});}
 });

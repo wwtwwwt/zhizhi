@@ -111,6 +111,13 @@ export async function convertPaper(value: string, endpoint = 'https://www.inktom
       markdown = markdown.slice(heading.position!.start.offset!);
       const end = markdown.search(/^## Instructions for reporting errors/m); if (end >= 0) markdown = markdown.slice(0,end);
     }
+    // InkToMd may replace inline site logos with a literal truncated data URL.
+    // These cannot be decoded; omit only known ellipsis placeholders here,
+    // keeping strict resource validation for actual imported image data.
+    const placeholders = imageNodes(markdown).filter(n => /^data:image\/[a-z\d+.-]+;base64(?:,)?(?:\.\.\.|…)$/i.test(n.url || ''));
+    for (const image of placeholders.sort((a,b) => b.position!.start.offset! - a.position!.start.offset!)) {
+      markdown = markdown.slice(0,image.position!.start.offset!) + (image.alt || '') + markdown.slice(image.position!.end.offset!);
+    }
     const name = heading ? nodeTree(printTree({type:'root',children:[heading]})).text.replace(/^Title:\s*/i,'').slice(0,240) : new URL(url).pathname.split('/').filter(Boolean).pop() || '论文';
     // PDF conversion cannot reliably provide a base for relative asset paths.
     if (new URL(url).pathname.startsWith('/pdf/') && imageNodes(markdown).some(n => !/^https?:|^data:/i.test(n.url || ''))) throw new AppError(502,'MISSING_PAPER_IMAGES','InkToMd 返回了没有下载地址的图片。请下载 Markdown 和图片后从文件导入。');

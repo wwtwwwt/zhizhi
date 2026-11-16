@@ -106,3 +106,18 @@ test('answer outline tracks headings, jumps, collapses and hides short messages'
   await expect(page.locator('.workspace .message-content h2')).toBeVisible();
   await expect(outline).toHaveCount(0);
 });
+
+
+test('imported article shows an outline without changing its user role',async({page,request})=>{
+  await request.put('/api/settings',{data:{showOutline:true}});
+  const paragraph='导入文章目录验证。'.repeat(350);
+  const imported=await(await request.post('/api/documents/import',{data:{name:'文章.md',markdown:`# 文章标题\n\n## 背景介绍\n\n${paragraph}\n\n### 详细过程\n\n${paragraph}\n\n## 总结\n\n${paragraph}`,resources:[]}})).json();
+  await page.goto('/');await page.evaluate(id=>localStorage.setItem('lastSession',id),imported.id);await page.reload();
+  await expect(page.locator('[data-document].message-user')).toHaveCount(1);
+  const outline=page.getByRole('navigation',{name:'当前回答目录'});
+  await expect(outline).toBeVisible();await expect(outline.locator('.message-outline-items button')).toHaveCount(3);
+  await outline.getByRole('button',{name:'总结',exact:true}).click();
+  await expect(outline.getByRole('button',{name:'总结',exact:true})).toHaveAttribute('aria-current','location');
+  await outline.getByRole('button',{name:'收起目录',exact:true}).click();
+  await expect(outline.getByRole('button',{name:'展开目录',exact:true})).toBeVisible();
+});

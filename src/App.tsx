@@ -177,6 +177,7 @@ function Conversation(props: ConversationProps) {
   const [navCenter,setNavCenter]=useState<number | undefined>(undefined);
   const [readingBottom, setReadingBottom] = useState<number | undefined>(undefined);
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
+  const [outlineMessage, setOutlineMessage] = useState<string | null>(null);
   const [navPreview, setNavPreview] = useState<{ message: Message; question?: Message; top: number } | null>(null);
   const showNavPreview = (message: Message, el: HTMLElement, question?: Message) => { const bounds = el.getBoundingClientRect(), parent = el.closest('.conversation')!.getBoundingClientRect(); setNavPreview({ message, question, top: Math.max(8, Math.min(bounds.top - parent.top - 16, parent.height - 190)) }); };
   const syncPosition = () => {
@@ -191,6 +192,9 @@ function Conversation(props: ConversationProps) {
     const assistantMessages = messages.filter(m => m.classList.contains('message-assistant'));
     const current = assistantMessages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || assistantMessages[0];
     setActiveMessage(current?.dataset.message || null);
+    const outlineMessages = messages.filter(m => m.classList.contains('message-assistant') || m.hasAttribute('data-document'));
+    const outlineCurrent = outlineMessages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || outlineMessages[0];
+    setOutlineMessage(outlineCurrent?.dataset.message || null);
   };
   const jumpToMessage = (id: string) => {
     const el = scroll.current, message = el?.querySelector<HTMLElement>(`[data-message="${id}"]`);
@@ -240,7 +244,7 @@ function Conversation(props: ConversationProps) {
     {assistantCount >= 3 && <nav className="message-navigation" style={{top:navCenter}} aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onFocus={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
     {!empty && readingBottom !== undefined && <div className="conversation-bottom-fade" aria-hidden="true" style={{ top: readingBottom - 28 }}/>}
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><>{navPreview.question && <div className="nav-question-preview">{navPreview.question.slots.length ? navPreview.question.slots.map(s => s.node.selection_text).join(' ') : navPreview.question.content_markdown}</div>}<div className="nav-answer-preview">{(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join('\n\n') : navPreview.message.content_markdown).slice(0,1200)}</div></></div>}
-    {state.settings?.showOutline === true && <MessageOutline scroll={scroll} messageId={activeMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>}
+    {state.settings?.showOutline === true && <MessageOutline scroll={scroll} messageId={outlineMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>}
     <Composer key={streamId || 'new'} streamId={streamId} busy={busy} onSend={onSend} compact={depth > 0}/>
   </section>;
 }
@@ -277,7 +281,7 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
     update();
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };
   }, [toolsHost, message.slots]);
-  return <article className={`message message-${message.role}`} data-message={message.id} tabIndex={-1}>
+  return <article className={`message message-${message.role}`} data-message={message.id} data-document={message.document_name ? true : undefined} tabIndex={-1}>
     <div className={`message-avatar ${message.document_name ? 'document-avatar' : isNote ? 'note-avatar' : ''}`} title={message.document_name || undefined}>{message.document_name ? <FileText size={13} aria-label="文档" role="img"/> : isNote ? <StickyNote size={13} aria-label="笔记" role="img"/> : message.role === 'user' ? <span>{userInitial(state.settings?.nickname)}</span> : <img src={brandMark} width={13} height={13} alt="AI"/>}</div>
     <div className="message-main"><div className="message-role">{message.document_name || (message.role === 'user' ? (isNote ? '笔记' : state.settings?.nickname || '你') : '枝知')}{message.role === 'assistant' && <span>{message.model_label || ''}</span>}</div>
       <div className="message-document" ref={documentRef}>

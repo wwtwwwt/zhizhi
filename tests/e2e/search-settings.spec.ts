@@ -63,9 +63,14 @@ test('link opens an independent reader and external-browser preference autosaves
   await page.goto('/');await page.evaluate(id=>localStorage.setItem('lastSession',id),imported.id);await page.reload();
   await page.route('https://example.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<html><body>隔离网页内容</body></html>'}));
   const before=await(await request.get(`/api/sessions/${imported.id}/map`)).json();
+  await page.getByRole('link',{name:'参考网页'}).hover();
+  await expect(page.getByRole('tooltip')).toContainText('https://example.com/article');
   await page.getByRole('link',{name:'参考网页'}).click();
   const dialog=page.getByRole('dialog',{name:'网页',exact:true});await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button',{name:'用默认浏览器打开'})).toBeVisible();
+  await expect(dialog.locator('header').getByRole('button',{name:'用默认浏览器打开'})).toBeVisible();
+  await expect(dialog.locator('header')).toContainText('https://example.com/article');
+  await expect(dialog.getByText('部分网站限制内嵌显示',{exact:false})).toHaveCount(0);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
   await expect(page.frameLocator('iframe[title="网页内容"]').getByText('隔离网页内容')).toBeVisible();
   const after=await(await request.get(`/api/sessions/${imported.id}/map`)).json();expect(after).toEqual(before);
   await dialog.getByRole('button',{name:'关闭网页',exact:true}).click();await expect(dialog).toHaveCount(0);

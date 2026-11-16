@@ -1,5 +1,6 @@
 import { useSidebarResize } from './useSidebarResize';
 import { Network } from 'lucide-react';
+import { LinkTooltip } from './LinkTooltip';
 import { LinkViewer } from './LinkViewer';
 import { ConversationMap } from './ConversationMap';
 import { mapBranchPath, type ConversationMapData, type MapMessage, type MapSearchHit } from '../shared/conversation-map';
@@ -134,7 +135,7 @@ export function App() {
     } catch (e) { notify((e as Error).message); return false; } finally { setCreating(false); }
   };
   return <div onCopy={copyMarkdownSelection} style={{ '--sidebar-width':`${sidebarResize.width}px`, '--reading-font-size':`${state.settings?.fontSize || 15}px` } as CSSProperties} className={`app-shell ${state.settings?.blurBackdrop ? 'blur-backdrops' : ''} ${collapsed ? 'sidebar-collapsed' : ''} ${sidebarResize.resizing ? 'resizing-sidebar' : ''}`} >
-    <LinkViewer/><aside className="sidebar" inert={collapsed || stack.length > 0 || !!manage}><div className="sidebar-content">
+    <LinkViewer/><LinkTooltip/><aside className="sidebar" inert={collapsed || stack.length > 0 || !!manage}><div className="sidebar-content">
       <div className="sidebar-brand"><div className="brand"><span>枝知</span></div>{releaseVersion && state.updates?.available && state.settings?.updateNotifications === true && <button className="icon-button update-indicator" aria-label="查看新版本" title={`新版本 ${state.updates.release?.tag}`} onClick={() => navigate('about')}><ArrowUpCircle size={18}/></button>}</div>
       {page === 'settings' ? <div ref={setSettingsSidebar} id="settings-sidebar" className="settings-sidebar"/> : <><button className="new-chat" onClick={() => chooseSession(null)}><Plus size={17}/><span>新的对话</span></button>
       <SessionList selectedId={page === 'chat' ? sessionId : null} onChoose={chooseSession} onManage={(session, kind) => {

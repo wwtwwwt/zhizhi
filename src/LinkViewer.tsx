@@ -32,5 +32,8 @@ export function LinkViewer() {
   },[url]);
   if(!url)return null;
   const external=()=>{if(desktop)void desktop.linkReader('external',url);else window.open(url,'_blank','noopener,noreferrer');};
-  return createPortal(<WindowPanel title="网页" onClose={()=>setUrl('')}><div className="link-view-toolbar"><span title={url}>{url}</span><button type="button" className="secondary-button" onClick={external}><ExternalLink size={13}/>用默认浏览器打开</button></div><p className="link-view-hint">{error ? '网页加载失败，请使用默认浏览器打开。' : desktop ? '网页内容独立展示，不会加入对话。' : '部分网站限制内嵌显示；若无法加载，请使用默认浏览器打开。'}</p><div className="link-view-content" ref={host}>{!desktop && <iframe title="网页内容" src={url} sandbox="allow-scripts allow-forms" referrerPolicy="no-referrer"/>}</div></WindowPanel>,document.body);
+  return createPortal(<WindowPanel title="网页" heading={<span className="link-view-address" title={url}>{url}</span>} actions={<button type="button" className="link-view-external" onClick={external}><ExternalLink size={13}/>用默认浏览器打开</button>} onClose={()=>setUrl('')}>
+    {error && <p className="link-view-hint" role="status">网页加载失败，请使用默认浏览器打开。</p>}
+    <div className="link-view-content" ref={host}>{!desktop && <iframe title="网页内容" src={url} sandbox="allow-scripts allow-forms" referrerPolicy="no-referrer"/>}</div>
+  </WindowPanel>,document.body);
 }

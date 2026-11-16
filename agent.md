@@ -128,3 +128,5 @@ macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿�
 链接默认打开独立共用WindowPanel，Electron使用隔离WebContentsView（无应用preload、无Node、独立临时session、拒绝权限与下载、仅主框架可调用IPC），不创建分支／消息，不入地图或上下文；顶部默认浏览器按钮，通用externalLinks可始终外部打开，存现有preferences。Web预览用sandbox iframe，网站嵌入限制可外部打开。查看器仅允许公开HTTP(S)网址及基础本地地址排除，不声称完整DNS隔离。
 
 Markdown硬换行仅渲染保留偏移的newline，取消与br重复导致的空行；共享正文／流式均生效。搜索状态改为检索和精读篇数，开启联网按钮无常驻底色。50项相关代码检查、2项无截图浏览器检查、隔离网页Electron smoke及生产／主进程构建通过，均使用本机模拟。
+
+网页查看器地址及默认浏览器入口并入共用WindowPanel可选标题区，删除常驻说明；正文链接悬停200ms展示文字及URL浮窗，无网络预取，离开／点击／滚动／失焦关闭。TypeScript、生产构建及1项无截图链接交互检查通过。

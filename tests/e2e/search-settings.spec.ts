@@ -29,7 +29,7 @@ test('search configuration is confirmed in a dialog and controls appear only aft
   await control.click();
   await expect(control).toHaveText('自动');
   const order = await control.evaluate(element => [...element.parentElement!.querySelectorAll('button')].map(button => button.getAttribute('aria-label')));
-  expect(order.indexOf('联网搜索')).toBe(order.indexOf('添加文本附件') + 1);
+  expect(order.indexOf('联网搜索')).toBe(order.indexOf('添加附件') + 1);
   let sent: any;
   await page.route('**/api/streams/*/messages', async route => { sent=route.request().postDataJSON(); await route.fulfill({ status:400,json:{error:{message:'测试停止：未调用模型'}} }); });
   await page.getByRole('textbox', { name:'输入你的问题', exact:true }).fill('请查资料');

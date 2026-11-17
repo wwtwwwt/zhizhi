@@ -437,8 +437,8 @@ test('model management adds individual models, discovers IDs, edits advanced val
   expect((await(await request.get('/api/models')).json()).find((m:any)=>m.id===saved.id).hasApiKey).toBe(false);
   await page.getByRole('button',{name:'回到对话',exact:true}).click();await page.getByRole('button',{name:'新的对话',exact:true}).click();
   const composer=page.locator('.workspace .unified-composer');await composer.getByRole('button',{name:'切换模型',exact:true}).click();await composer.getByRole('menuitemradio',{name:'纯文本模型',exact:true}).click();
-  await expect(composer.getByRole('button',{name:'添加图片附件',exact:true})).toHaveCount(0);await expect(composer.getByRole('button',{name:'添加文本附件',exact:true})).toBeVisible();
-  await composer.getByRole('button',{name:'切换模型',exact:true}).click();await composer.getByRole('menuitemradio',{name:'模拟模式',exact:true}).click();await expect(composer.getByRole('button',{name:'添加图片附件',exact:true})).toBeVisible();
+  await expect(composer.locator('input[aria-label="附件"]')).not.toHaveAttribute('accept',/image\//);await expect(composer.getByRole('button',{name:'添加附件',exact:true})).toBeVisible();
+  await composer.getByRole('button',{name:'切换模型',exact:true}).click();await composer.getByRole('menuitemradio',{name:'模拟模式',exact:true}).click();await expect(composer.locator('input[aria-label="附件"]')).toHaveAttribute('accept',/image\/png/);
   await page.reload();await expect(page.locator('.workspace .model-switch')).toHaveText('模拟模式');
   await request.delete(`/api/models/${saved.id}`);
 });
@@ -449,18 +449,22 @@ test('shared composers send attachments, persist simulated reasoning and match t
   const beforeFocus = await composer.evaluate(el=>getComputedStyle(el).borderColor); await composer.getByRole('textbox',{name:'输入你的问题'}).focus(); expect(await composer.evaluate(el=>getComputedStyle(el).borderColor)).toBe(beforeFocus);
   const arc = await composer.locator('.context-meter circle').last().getAttribute('stroke-dasharray'); expect(Number(arc!.split(' ')[0])).toBeLessThan(25);
   await composer.getByRole('button',{name:'上下文余量',exact:true}).hover();await expect(composer.getByRole('tooltip')).toContainText('估算剩余');
-  await composer.locator('input[aria-label="图片附件"]').setInputFiles({name:'pixel.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII=','base64')});
-  await composer.locator('input[aria-label="文本附件"]').setInputFiles({name:'example.py',mimeType:'text/plain',buffer:Buffer.from('print("hello")')});
+  const chooserPromise=page.waitForEvent('filechooser');await composer.getByRole('button',{name:'添加附件',exact:true}).click();
+  const chooser=await chooserPromise;expect(chooser.isMultiple()).toBe(true);
+  await chooser.setFiles([
+    {name:'pixel.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1sAAAAASUVORK5CYII=','base64')},
+    {name:'example.py',mimeType:'text/plain',buffer:Buffer.from('print("hello")')},
+  ]);
   await expect(composer.locator('.attachment-chip')).toHaveCount(2);await composer.getByRole('textbox',{name:'输入你的问题'}).fill('结合附件解释');await composer.getByRole('button',{name:'发送问题',exact:true}).click();
   const reasoning=page.locator('.workspace .reasoning-panel');await expect(reasoning).toContainText('模拟思考摘要');await expect(reasoning.getByLabel('思考用时')).toHaveText(/\d+秒/);await reasoning.locator('summary').click();await expect(reasoning).toContainText('固定的模拟思考摘要');
   const source=page.locator('.workspace .message-assistant [data-node]').first();await expect(source).toBeVisible();await expect(page.locator('.workspace .message-user .message-attachments a')).toHaveCount(2);
   const body=await page.locator('.workspace .message-user .message-content').boundingBox(), box=await composer.boundingBox();expect(Math.abs(body!.x-box!.x)).toBeLessThan(2);expect(Math.abs(body!.width-box!.width)).toBeLessThan(2);
   await page.reload();await expect(reasoning).toContainText('固定的模拟思考摘要');await expect(page.locator('.workspace .message-attachments img')).toHaveCount(1);
   await request.put('/api/models/fake',{data:{fakeDelay:0}});
-  await selectText(page,source,'梯度下降');const floating=page.locator('.selection-popover .unified-composer');await expect(floating.getByRole('button',{name:'添加图片附件',exact:true})).toBeVisible();await expect(floating.getByRole('button',{name:'上下文余量',exact:true})).toBeVisible();
-  await floating.locator('input[aria-label="文本附件"]').setInputFiles({name:'branch.md',mimeType:'text/plain',buffer:Buffer.from('分支附件')});await floating.getByRole('textbox',{name:'输入追问',exact:true}).fill('解释这部分');await floating.getByRole('button',{name:'创建分支',exact:true}).click();
+  await selectText(page,source,'梯度下降');const floating=page.locator('.selection-popover .unified-composer');await expect(floating.getByRole('button',{name:'添加附件',exact:true})).toBeVisible();await expect(floating.getByRole('button',{name:'上下文余量',exact:true})).toBeVisible();
+  await floating.locator('input[aria-label="附件"]').setInputFiles({name:'branch.md',mimeType:'text/plain',buffer:Buffer.from('分支附件')});await floating.getByRole('textbox',{name:'输入追问',exact:true}).fill('解释这部分');await floating.getByRole('button',{name:'创建分支',exact:true}).click();
   const layer=page.locator('.top-layer');await expect(layer.locator('.message-user .message-attachments')).toContainText('branch.md');await expect(layer.getByRole('button',{name:'切换模型',exact:true})).toBeVisible();
-  await layer.getByRole('textbox',{name:'继续分支对话',exact:true}).fill('继续看附件');await layer.locator('.unified-composer input[aria-label="文本附件"]').setInputFiles({name:'next.txt',mimeType:'text/plain',buffer:Buffer.from('下一段')});await layer.getByRole('button',{name:'发送问题',exact:true}).click();await expect(layer.locator('.message-user')).toHaveCount(2);
+  await layer.getByRole('textbox',{name:'继续分支对话',exact:true}).fill('继续看附件');await layer.locator('.unified-composer input[aria-label="附件"]').setInputFiles({name:'next.txt',mimeType:'text/plain',buffer:Buffer.from('下一段')});await layer.getByRole('button',{name:'发送问题',exact:true}).click();await expect(layer.locator('.message-user')).toHaveCount(2);
 });
 
 test('homepage document import handles missing local images, persists split document and supports ordinary follow-up and branches',async({page,request})=>{

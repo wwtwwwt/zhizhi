@@ -142,3 +142,5 @@ Markdown硬换行仅渲染保留偏移的newline，取消与br重复导致的空
 文件夹管理弹窗通过Portal渲染到body，避免透明侧栏隔离层和overflow遮挡；新建／重命名／删除共用修复。生产构建及1项无截图浏览器检查通过，覆盖深色透明侧栏中新建、输入聚焦、保存及重命名退出。
 
 联网供应商弹窗可选DeepSeek／Tavily／Exa MCP；既有secrets文件保留DeepSeek searchKey，新增searchKeys按供应商保存密钥及searchProvider，不新增表。Exa可无Key使用官方限额，仅固定web_search_exa／web_fetch_exa，不导入远程提示或开放自定义MCP。生成快照记录所选供应商，工具记录仍不持久化。51项相关代码检查、3项无截图界面检查及生产／Electron主进程构建通过；外部工具列表只读核实，无真实搜索／抓取调用。
+
+联网搜索入口复用model-list边框容器，未配置时使用中性「配置联网搜索」，配置后显示所选服务。类型及差异检查通过。

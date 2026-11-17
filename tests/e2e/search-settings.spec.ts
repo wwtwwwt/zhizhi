@@ -26,8 +26,12 @@ test('search configuration is confirmed in a dialog and controls appear only aft
   await page.getByRole('button', { name: '切换模型', exact: true }).first().click();
   await page.getByRole('menuitemradio', { name:model.name, exact:true }).click();
   await expect(control).toHaveAttribute('aria-pressed', 'false');
+  const offColor=await control.evaluate(el=>getComputedStyle(el).color);
   await control.click();
-  await expect(control).toHaveText('自动');
+  await expect(control).toHaveText('');
+  await expect.poll(()=>control.evaluate(el=>getComputedStyle(el).color)).not.toBe(offColor);
+  await expect(control).toHaveAttribute('title',/联网已开启/);
+  await expect(control).toHaveAttribute('aria-pressed','true');
   const order = await control.evaluate(element => [...element.parentElement!.querySelectorAll('button')].map(button => button.getAttribute('aria-label')));
   expect(order.indexOf('联网搜索')).toBe(order.indexOf('添加附件') + 1);
   let sent: any;
@@ -37,16 +41,16 @@ test('search configuration is confirmed in a dialog and controls appear only aft
   await expect.poll(() => sent?.webSearch).toBe('auto');
   await expect(page.getByRole('textbox', { name:'输入你的问题', exact:true })).toBeEnabled();
   await control.click();
-  await expect(control).toHaveText('关闭');
+  await expect(control).toHaveAttribute('aria-pressed','false');
   await page.getByRole('button', { name:'发送问题', exact:true }).click();
   await expect.poll(() => sent?.webSearch).toBe('off');
   await control.click();
   await page.locator('button.new-chat').click();
-  await expect(control).toHaveText('自动');
+  await expect(control).toHaveAttribute('aria-pressed','true');
   await page.getByRole('textbox', { name:'输入你的问题',exact:true }).fill('新对话仍然联网');
   await page.getByRole('button', { name:'发送问题',exact:true }).click();
   await expect.poll(() => sent?.webSearch).toBe('auto');
-  await expect(control).toHaveText('自动');
+  await expect(control).toHaveAttribute('aria-pressed','true');
 
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '配置联网搜索', exact: true }).click();

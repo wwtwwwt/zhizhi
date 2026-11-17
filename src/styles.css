@@ -500,8 +500,10 @@ html.native-sidebar-blur[data-theme] .sidebar{background:var(--material-surface)
 
 .search-provider-settings{margin-top:26px;padding-top:18px;border-top:1px solid var(--line)}
 .search-provider-settings .model-row strong{display:flex;align-items:center;gap:6px}
-.web-search-switch{color:var(--neutral-3,#909090);transition:color 120ms}
-.web-search-switch.active{color:#236bc4;background:transparent}
+.attachment-controls{gap:2px}
+.attachment-controls>.icon-button{width:24px;height:24px;padding:4px}
+.web-search-switch{color:var(--neutral-3,#909090);transition:color 120ms,background-color 120ms}
+.web-search-switch.active{color:#236bc4}
 :root[data-theme="dark"] .web-search-switch.active{color:#85baff}
 .web-search-switch.active:hover{color:#1956a3}
 :root[data-theme="dark"] .web-search-switch.active:hover{color:#b0d3ff}

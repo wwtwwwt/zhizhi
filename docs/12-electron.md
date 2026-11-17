@@ -50,3 +50,5 @@ CI的ZHIZHI_RELEASE_TAG同时由Vite注入前端、build-electron.mjs注入Elect
 ## 隔离网页查看器
 
 `electron/link-view.ts`管理临时WebContentsView，使用独立非持久session，无应用preload或Node能力，权限与下载默认拒绝。受限IPC仅应用主框架可调用；边界坐标随共用窗口动画及缩放同步，Esc和关闭清理。网页不获得API认证头，不成为对话分支；Web预览退回sandbox iframe。详见[02](02-ui-interactions.md)。无截图本机模拟检查可运行`node scripts/test-link-reader.mjs`，先构建前端及Electron主进程。
+
+应用主题通过仅限应用主框架调用的`window-theme` IPC同步`nativeTheme.themeSource`（light／dark／system），确保侧栏vibrancy／Acrylic与应用配色一致，即使应用主题和操作系统外观不同。透明控件按页面data-theme明确选色，背景透明度仍为浅色40%、深色5%。macOS无截图桌面检查覆盖主题错配及切换恢复，Windows材质视觉需实机验收。

@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
+import { desktop } from './desktop';
 export type ThemeMode = 'light' | 'dark' | 'system';
 const key = 'appearance';
 function apply(mode: ThemeMode) {
+  // Native sidebar material must follow the app preference, not just OS appearance.
+  void desktop?.setTheme(mode).catch(() => {});
   const dark = mode === 'dark' || mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light';

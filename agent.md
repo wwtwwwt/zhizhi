@@ -1,6 +1,6 @@
 # 项目续接入口
 
-更新日期：2026-11-16（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
+更新日期：2026-11-17（Asia/Shanghai）。目录：`/Users/wwtu/MyWorkspace/MyPro/20261030learnhelper`。
 
 ## 当前任务状态
 
@@ -136,3 +136,5 @@ Markdown硬换行仅渲染保留偏移的newline，取消与br重复导致的空
 右侧目录支持导入文章（document_name）及AI回答，独立于仅AI消息的左侧定位条；导入消息仍保持user角色，目录复用二三级标题、长度阈值、章节跟随及通用开关。3项无截图目录检查及生产构建通过。
 
 新增模型引导默认开启图片支持，上下文256000 token（256k）；已有配置和复制沿用原值。类型及差异检查通过。
+
+2026-11-17：应用外观经受限主框架IPC同步Electron nativeTheme.themeSource，原生vibrancy／Acrylic跟随应用的light／dark／system，避免深色页面叠在浅色系统材质上。侧栏透明背景、边框、悬停、选中及文件夹引导线按data-theme显式取色，浅色40%／深色5%保持。生产／主进程构建和macOS无截图桌面smoke通过，含人为设置浅色原生外观后切深色及恢复浅色／system；Windows原生效果未实机验证。

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, safeStorage, session, shell } from 'electron';
 import { createServer, type Server } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -73,6 +73,11 @@ async function start() {
   browserSession.setPermissionRequestHandler((_webContents,permission,callback)=>callback(permission==='clipboard-sanitized-write'));
   browserSession.setPermissionCheckHandler((_webContents,permission)=>permission==='clipboard-sanitized-write');
   const window=new BrowserWindow({width:1240,height:860,minWidth:760,minHeight:540,title:'枝知',backgroundColor:'#ffffff',show:false,...(process.platform === 'win32' ? {backgroundColor:'#00000000'} : {}),...(process.platform === 'darwin' ? {titleBarStyle:'hidden' as const,trafficLightPosition:{x:16,y:16},visualEffectState:'followWindow' as const,backgroundColor:'#00000000'} : {}),webPreferences:{preload:join(here,'preload.cjs'),nodeIntegration:false,contextIsolation:true,sandbox:true,webSecurity:true}});
+  ipcMain.handle('window-theme', (event, mode: unknown) => {
+    if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || !['light','dark','system'].includes(String(mode))) return false;
+    nativeTheme.themeSource = mode as 'light' | 'dark' | 'system';
+    return true;
+  });
   ipcMain.handle('sidebar-material', (event, enabled: unknown) => {
     if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || typeof enabled !== 'boolean') return false;
     if (process.platform === 'darwin') window.setVibrancy(enabled ? 'sidebar' : null);

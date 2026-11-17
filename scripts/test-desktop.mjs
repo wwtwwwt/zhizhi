@@ -46,6 +46,28 @@ try{
     await expect(page.locator('html')).not.toHaveClass(/native-sidebar-blur/);
   }
 
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    // Reproduce a light native material underneath a manually dark app theme.
+    await desktop.evaluate(({nativeTheme})=>{nativeTheme.themeSource='light';});
+    await page.evaluate(async()=>{await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sidebarBlur:true,theme:'dark'})});});
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme','dark');
+    await expect(page.locator('html')).toHaveClass(/native-sidebar-blur/);
+    await expect.poll(()=>desktop.evaluate(({nativeTheme})=>({source:nativeTheme.themeSource,dark:nativeTheme.shouldUseDarkColors}))).toEqual({source:'dark',dark:true});
+    const palette=await page.locator('.sidebar').evaluate(element=>{const style=getComputedStyle(element);return {surface:style.backgroundColor,text:style.color,line:style.borderRightColor};});
+    expect(palette).toEqual({surface:'rgba(255, 255, 255, 0.05)',text:'rgb(222, 222, 222)',line:'rgba(255, 255, 255, 0.086)'});
+    await page.locator('.new-chat').hover();
+    expect(await page.locator('.new-chat').evaluate(element=>getComputedStyle(element).backgroundColor)).toBe('rgba(255, 255, 255, 0.07)');
+    await page.evaluate(async()=>{await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:'light'})});});
+    await page.reload();
+    await expect.poll(()=>desktop.evaluate(({nativeTheme})=>nativeTheme.themeSource)).toBe('light');
+    await expect.poll(()=>page.locator('.sidebar').evaluate(element=>getComputedStyle(element).backgroundColor)).toBe('rgba(255, 255, 255, 0.4)');
+    await page.evaluate(async()=>{await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sidebarBlur:false,theme:'system'})});});
+    await page.reload();
+    await expect.poll(()=>desktop.evaluate(({nativeTheme})=>nativeTheme.themeSource)).toBe('system');
+    await expect(page.locator('html')).not.toHaveClass(/native-sidebar-blur/);
+  }
+
   expect((await fetch(origin+'/api/health')).status).toBe(401);
   const model=await page.evaluate(async()=>{
     const response=await fetch('/api/models',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Desktop Stub',model:'stub',baseUrl:'http://127.0.0.1:9999/v1',supportsImages:false,parameters:[],apiKey:'desktop-smoke-key'})});

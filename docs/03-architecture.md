@@ -36,7 +36,7 @@
 | server/store.ts、schema.sql | SQLite事务、节点／版本、上下文、重构及资源回收 |
 | server/model-registry.ts、attachments.ts、documents.ts | 模型／密钥、消息附件、文档资源与转换 |
 | server/providers/ | Chat Completions／Responses／Messages请求与事件适配、共用流式生命周期和固定模拟样本 |
-| server/providers/agent.ts、server/web-search.ts | AI SDK轻量循环、DeepSeek Search／Fetch；本轮协议与网页缓存，不持久化执行记录 |
+| server/providers/agent.ts、server/web-search.ts、server/search-services.ts、server/search-config.ts | AI SDK轻量循环、DeepSeek／Tavily／Exa MCP搜索读取及供应商配置；本轮协议与网页缓存，不持久化执行记录 |
 | src/SearchSettings.tsx、SearchProgressPanel.tsx、shared/search.ts | 搜索配置弹窗、当前生成查询状态和共用类型 |
 | server/model-import.ts、model-connection.ts | 本机Claude Code／Codex配置解析及无密钥导入元数据、模型发现与可用性检测 |
 | shared/ | 类型、Markdown AST／位置映射、预算估算、SSE解析和布局计算 |

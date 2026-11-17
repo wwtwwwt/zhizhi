@@ -90,6 +90,6 @@ localStorage.lastSession保存最近会话；消息和模型权威数据仍在SQ
 
 ## 联网搜索配置
 
-供应商页在模型列表下展示DeepSeek Search入口，WindowPanel弹窗手动保存／取消，清除密钥也须保存。密钥与模型密钥分别保存在现有密钥文件，不新增表。保存后输入框显示关闭／自动开关，清除后隐藏；工具记录仅当前生成保留，详见[16](16-agent-search.md)。
+供应商页在模型列表下展示当前搜索服务入口（DeepSeek／Tavily／Exa MCP），WindowPanel弹窗手动保存／取消，清除密钥也须保存。密钥与模型密钥分别保存在现有密钥文件，不新增表。保存后输入框显示关闭／自动开关，DeepSeek／Tavily清除后隐藏，Exa清除密钥后使用免密钥限额；工具记录仅当前生成保留，详见[16](16-agent-search.md)。
 
 通用externalLinks偏好默认false，控制是否始终用默认浏览器打开外部链接；自动保存到既有preferences，无新增表。默认使用独立网页窗口，规则见[02](02-ui-interactions.md)。

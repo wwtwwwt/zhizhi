@@ -20,6 +20,7 @@
     "@ai-sdk/anthropic": "^4.0.105",
     "@ai-sdk/openai": "^4.0.118",
     "@ai-sdk/openai-compatible": "^3.0.92",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "ai": "^7.0.173",
     "express": "^5.1.0",
     "htmlparser2": "^12.0.0",

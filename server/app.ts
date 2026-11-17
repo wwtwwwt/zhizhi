@@ -1,3 +1,4 @@
+import { publicSearchConfig, saveSearchConfig } from './search-config';
 import { renderPrompt } from './prompts';
 import { UpdateChecker } from './updates';
 import express, { type Request, type Response, type NextFunction } from 'express';
@@ -56,16 +57,16 @@ export function createApp(store: Store, options: { searchEndpoint?: string; read
   };
   const attachmentInput = z.array(z.object({ name: z.string().min(1).max(250), kind: z.enum(['text','image']), mime: z.string().max(100), data: z.string().max(8 * 1024 * 1024) })).max(6).default([]);
   const sendOptions = { webSearch: z.enum(['off','auto']).default('off'), modelId: z.string().max(100).optional(), attachments: attachmentInput };
+  const searchConfigForGeneration = (provider: import('../shared/search').SearchProvider = 'deepseek') => {
+    const secrets = store.secrets.read();
+    return { key: provider === 'deepseek' ? secrets.searchKey || '' : secrets.searchKeys?.[provider] || '' };
+  };
   app.get('/api/documents/picker', (_req,res) => res.json({available:!!options.pickDocument}));
   app.post('/api/documents/picker', async (_req,res) => res.json(options.pickDocument ? await options.pickDocument() : null));
-  app.get('/api/search-settings', (_req, res) => res.json({ provider: 'deepseek', configured: !!store.secrets.read().searchKey }));
+  app.get('/api/search-settings', (_req, res) => res.json(publicSearchConfig(store.secrets)));
   app.put('/api/search-settings', (req, res) => {
-    const data = z.object({ apiKey: z.string().trim().max(10000).optional(), clear: z.boolean().optional() }).parse(req.body);
-    const secrets = store.secrets.read();
-    if (data.clear) delete secrets.searchKey;
-    else if (data.apiKey) secrets.searchKey = data.apiKey;
-    store.secrets.write(secrets);
-    res.json({ provider: 'deepseek', configured: !!secrets.searchKey });
+    const data = z.object({ provider:z.enum(['deepseek','tavily','exa']).optional(), apiKey: z.string().trim().max(10000).optional(), clear: z.boolean().optional() }).parse(req.body);
+    res.json(saveSearchConfig(store.secrets,data));
   });
   app.get('/api/models', (_req, res) => res.json(store.models.list()));
   app.post('/api/models', (req, res) => res.json(saveModel(modelInput.parse(req.body))));
@@ -186,7 +187,7 @@ export function createApp(store: Store, options: { searchEndpoint?: string; read
       const messages = JSON.parse(g.context_json);
       const onReasoning = (text: string) => { reasoning += text; store.run('UPDATE generations SET reasoning_text=? WHERE id=?', reasoning, gid); if (g.target_message_id) store.run('UPDATE messages SET reasoning_text=? WHERE id=?', reasoning, g.target_message_id); send('reasoning', { text }); };
       const output = settings.webSearch === 'auto'
-        ? streamAgent({ model: settings.modelConfig, apiKey: store.models.key(settings.modelConfig.id), searchKey: store.secrets.read().searchKey || '', messages: store.hydrate(messages), signal: controller.signal, onReasoning, onProgress: progress => send('search-progress', progress), searchEndpoint: options.searchEndpoint })
+        ? streamAgent({ model: settings.modelConfig, apiKey: store.models.key(settings.modelConfig.id), searchKey: searchConfigForGeneration(settings.searchProvider).key, searchProvider: settings.searchProvider || 'deepseek', messages: store.hydrate(messages), signal: controller.signal, onReasoning, onProgress: progress => send('search-progress', progress), searchEndpoint: options.searchEndpoint })
         : streamChat({ messages: store.hydrate(messages), settings, apiKey: store.models.key(settings.modelConfig.id), internalToken: options.apiToken, onReasoning, fakeUrl: `http://${address}:${req.socket.localPort}/api/fake/v1/chat/completions`, kind: g.kind, depth, signal: controller.signal });
       for await (const text of output) {
         if (controller.signal.aborted) break;

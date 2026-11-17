@@ -4,12 +4,12 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import type { ChatMessage } from '../../shared/types';
 import { estimateText, modelBudget, requestParameters, type ModelConfig } from '../../shared/models';
-import type { SearchProgress } from '../../shared/search';
+import type { SearchProgress, SearchProvider } from '../../shared/search';
 import { createSearchTools } from '../web-search';
 import { renderPrompt } from '../prompts';
 import { AppError } from '../store';
 
-export async function* streamAgent(options: { model: ModelConfig; apiKey: string; searchKey: string; messages: ChatMessage[]; signal: AbortSignal; onReasoning: (text: string) => void; onProgress: (value: SearchProgress) => void; searchEndpoint?: string }) {
+export async function* streamAgent(options: { model: ModelConfig; apiKey: string; searchKey: string; searchProvider?: SearchProvider; messages: ChatMessage[]; signal: AbortSignal; onReasoning: (text: string) => void; onProgress: (value: SearchProgress) => void; searchEndpoint?: string }) {
   const { model } = options;
   const api = model.apiType || 'chat', base = model.baseUrl.replace(/\/+$/, '');
   const signal = AbortSignal.any([options.signal, AbortSignal.timeout(180_000)]);
@@ -45,7 +45,7 @@ export async function* streamAgent(options: { model: ModelConfig; apiKey: string
   const anthropic = createAnthropic({ apiKey: options.apiKey || 'local', baseURL: /\/v1$/.test(base) ? base : `${base}/v1`, headers: model.authType === 'bearer' ? { Authorization: `Bearer ${options.apiKey}`, 'x-api-key': '' } : undefined, fetch: transport });
   const messages: ModelMessage[] = options.messages.map(message => ({ role: message.role, content: typeof message.content === 'string' ? message.content : message.content.map(part => part.type === 'text' ? part : { type: 'file', data: part.image_url.url, mediaType: /^data:([^;]+);/.exec(part.image_url.url)?.[1] || 'image/*' }) })) as ModelMessage[];
   messages.unshift({ role: 'system', content: renderPrompt('webSearchSystem') });
-  const search = createSearchTools({ key: options.searchKey, signal, onProgress: options.onProgress, endpoint: options.searchEndpoint });
+  const search = createSearchTools({ key: options.searchKey, provider: options.searchProvider, signal, onProgress: options.onProgress, endpoint: options.searchEndpoint });
   let lastFinish = '', steps = 0;
   const result = streamText({
     model: api === 'messages' ? anthropic(model.model) : api === 'responses' ? openai.responses(model.model) : compatible.chatModel(model.model),

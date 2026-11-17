@@ -15,7 +15,7 @@ test('search configuration is confirmed in a dialog and controls appear only aft
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('已配置 · 搜索与网页读取', { exact: true })).toBeVisible();
   const settings = await (await request.get('/api/search-settings')).json();
-  expect(settings).toEqual({ provider: 'deepseek', configured: true });
+  expect(settings).toEqual({ provider: 'deepseek', configured: true, configuredProviders:{deepseek:true,tavily:false,exa:false} });
   await page.getByRole('button', { name: '回到对话', exact: true }).click();
   const control = page.getByRole('button', { name: '联网搜索', exact: true }).first();
   await expect(control).toBeVisible();
@@ -81,4 +81,18 @@ test('link opens an independent reader and external-browser preference autosaves
   const popupPromise=page.waitForEvent('popup');await page.getByRole('link',{name:'参考网页'}).click();const popup=await popupPromise;await popup.close();
   await expect(page.getByRole('dialog',{name:'网页',exact:true})).toHaveCount(0);
   await request.put('/api/settings',{data:{externalLinks:false}});
+});
+
+test('search dialog selects providers, cancels changes and keeps separate credentials',async({page,request})=>{
+  await request.put('/api/search-settings',{data:{provider:'deepseek',apiKey:'deepseek-ui-key'}});
+  await page.goto('/settings');await page.getByRole('tab',{name:'供应商',exact:true}).click();await page.getByRole('button',{name:'配置联网搜索',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'联网搜索',exact:true}),select=dialog.getByRole('combobox',{name:'搜索服务'});
+  await select.selectOption('tavily');await dialog.getByRole('textbox',{name:'联网搜索 API Key'}).fill('unsaved');await dialog.getByRole('button',{name:'取消',exact:true}).click();
+  expect((await(await request.get('/api/search-settings')).json()).provider).toBe('deepseek');
+  await page.getByRole('button',{name:'配置联网搜索',exact:true}).click();await select.selectOption('tavily');await dialog.getByRole('textbox',{name:'联网搜索 API Key'}).fill('tavily-ui-key');await dialog.getByRole('button',{name:'保存',exact:true}).click();
+  await expect(page.locator('.search-provider-settings .model-row strong')).toHaveText('Tavily');
+  let settings=await(await request.get('/api/search-settings')).json();expect(settings).toMatchObject({provider:'tavily',configured:true,configuredProviders:{deepseek:true,tavily:true}});expect(JSON.stringify(settings)).not.toContain('-ui-key');
+  await page.getByRole('button',{name:'配置联网搜索',exact:true}).click();await select.selectOption('exa');await expect(dialog.getByText('API Key（可选）',{exact:true})).toBeVisible();await dialog.getByRole('button',{name:'保存',exact:true}).click();
+  settings=await(await request.get('/api/search-settings')).json();expect(settings).toMatchObject({provider:'exa',configured:true});
+  await request.put('/api/search-settings',{data:{provider:'tavily',clear:true}});await request.put('/api/search-settings',{data:{provider:'deepseek',clear:true}});
 });

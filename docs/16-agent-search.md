@@ -2,20 +2,20 @@
 
 ## 使用与开关
 
-在「设置 → 供应商 → 联网搜索」配置 DeepSeek API Key。配置弹窗必须点击保存，关闭或取消不落盘；清除按钮也在保存后生效。使用 DeepSeek 官方 Search 和 Fetch 服务，直接访问，不经过论文转换代理；对话模型可以来自其他供应商，但必须支持工具调用。
+在「设置 → 供应商 → 联网搜索」选择 DeepSeek Search、Tavily 或 Exa MCP，并填写对应密钥。Exa可留空密钥使用官方免费限额；保存选择后即可启用，网络或额度受限时填写Exa密钥。配置弹窗必须点击保存，关闭或取消不落盘；清除按钮也在保存后生效。DeepSeek使用Search／Fetch，Tavily使用Search／Extract，Exa通过固定官方MCP服务调用搜索／读取；均不经过论文转换代理；对话模型可以来自其他供应商，但必须支持工具调用。
 
-配置后，主对话、分支共用输入框的文件按钮右侧出现「关闭／自动」开关。默认关闭，在本页面生命周期内统一记住选择；连续发送、创建新对话或打开分支都沿用当前模式，刷新恢复关闭。模拟模型显示禁用提示。清除搜索密钥后隐藏开关，发送回到关闭模式。笔记编辑不显示开关。
+配置后，主对话、分支共用输入框的文件按钮右侧出现「关闭／自动」开关。默认关闭，在本页面生命周期内统一记住选择；连续发送、创建新对话或打开分支都沿用当前模式，刷新恢复关闭。模拟模型显示禁用提示。DeepSeek／Tavily未配置或清除密钥后隐藏开关，发送回到关闭模式；Exa清除密钥后回到免密钥限额，不隐藏开关。笔记编辑不显示开关。
 
 - 关闭：沿用原有单次模型请求，不提供工具、不追加搜索提示词、不进行额外模型推理。
 - 自动：AI SDK Core 驱动函数工具循环，模型自行决定是否搜索、是否读取网页，也可以直接回答。自动不等于每次强制搜索。结合追问重新回答沿用目标流输入框的模式及模型。
 
-Search／Fetch 按服务商成功非空请求计费，对话模型调用另计。保存密钥不自动进行收费检测。
+费用及免费限额以所选服务商政策为准，对话模型调用另计。保存密钥不自动进行收费检测。
 
 ## 数据与生命周期
 
-**工具执行记录不持久化，不新增数据库表。** 搜索密钥复用现有 secrets.json 的 searchKey 字段，桌面版沿用 safeStorage 加密，Web 开发预览沿用现有本机密钥机制。模型密钥和搜索密钥互不覆盖，API仅返回provider与configured，不返回密钥。清空数据沿用现有密钥清理流程。
+**工具执行记录不持久化，不新增数据库表。** 复用现有secrets.json：searchKey保留DeepSeek密钥，searchKeys分别保存Tavily／Exa密钥，searchProvider保存当前选择，桌面版沿用 safeStorage 加密，Web 开发预览沿用现有本机密钥机制。模型密钥和搜索密钥互不覆盖，API仅返回provider、configured及各家是否有密钥的configuredProviders，不返回密钥；切换供应商不覆盖其他密钥。清空数据沿用现有密钥清理流程。
 
-发送模式写入既有 generations.settings_json，任务原始上下文仍是既有 context_json。本轮的工具调用、结果、网页缓存和协议附加数据仅在服务端循环内保留；SSE将执行状态和来源发送到前端当前job。界面以「正在检索资料／已检索到N篇资料」「正在精读N篇资料／已精读N篇资料」反馈，不再列出工具调用日志；检索篇数累加有效返回结果，精读按本轮不同URL计数，分页不重复计篇。生成结束、停止或失败后，折叠查询过程消失，不保留可再次打开的历史记录。刷新无法恢复或续跑循环。
+发送模式与当次所选searchProvider写入既有generations.settings_json（不包含密钥），切换配置不改变已创建任务的供应商；密钥执行时从对应供应商读取。任务原始上下文仍是既有context_json。本轮的工具调用、结果、网页缓存和协议附加数据仅在服务端循环内保留；SSE将执行状态和来源发送到前端当前job。界面以「正在检索资料／已检索到N篇资料」「正在精读N篇资料／已精读N篇资料」反馈，不再列出工具调用日志；检索篇数累加有效返回结果，精读按本轮不同URL计数，分页不重复计篇。生成结束、停止或失败后，折叠查询过程消失，不保留可再次打开的历史记录。刷新无法恢复或续跑循环。
 
 完成回答会附上工具成功获得的来源链接清单，随正文正常保存、切块和进入后续上下文；模型也被要求在相关论述旁引用真实URL。程序追加的清单包含本轮全部有效来源，可能包括未实际用于结论的来源；它不代表逐句事实核验。停止／失败只保存已输出的正文，不保证补齐来源清单。
 
@@ -23,7 +23,7 @@ Search／Fetch 按服务商成功非空请求计费，对话模型调用另计�
 
 ## 循环与协议
 
-实现入口为 server/providers/agent.ts，使用 AI SDK Core 和三个接口适配器：Chat Completions 使用 openai-compatible，Responses 使用 openai，Messages 使用 anthropic。保留现有模型地址、密钥、参数和图片能力配置。无代理商网关，无MCP、Skill或任意命令入口。
+实现入口为 server/providers/agent.ts，使用 AI SDK Core 和三个接口适配器：Chat Completions 使用 openai-compatible，Responses 使用 openai，Messages 使用 anthropic。保留现有模型地址、密钥、参数和图片能力配置。无代理商网关；只有内置Exa搜索适配使用官方MCP协议，无自定义MCP、Skill或任意命令入口。
 
 SDK在本轮回传工具请求／结果和必要的思考协议：Chat reasoning_content、Responses encrypted reasoning、Messages signed thinking。Responses始终store=false，显式包含加密思考内容，不依赖服务端会话或previous_response_id。这些数据不进入数据库。
 
@@ -47,3 +47,19 @@ server/web-search.ts提供：
 ## 验证边界
 
 使用本机HTTP模拟服务验证三种协议的「搜索 → 读取 → 回答」、思考协议回传、来源保存、后续上下文不含原始工具结果、关闭时单次请求、密钥隔离、预算、上限及取消；无截图浏览器检查配置弹窗及开关。没有读取真实用户配置或调用付费模型／搜索，实际供应商联网结果与费用需实际使用时验证。
+
+## 多供应商适配
+
+`server/search-config.ts`管理既有密钥文件中的供应商选择与公开状态；`server/search-services.ts`适配远程接口；`server/web-search.ts`共用来源、缓存、分页、活动计数和限制。不给模型注入远程MCP工具描述或instructions，模型仍仅看到应用定义的web_search、web_read两个工具。通用协议和前端检索／精读数量提示不变。
+
+| 服务 | 搜索 | 网页读取 | 鉴权 |
+|---|---|---|---|
+| DeepSeek | POST /v1/tools/search，count=5 | POST /v1/tools/fetch | Bearer API Key |
+| Tavily | https://api.tavily.com/search，basic、max_results=5，不请求答案或全文 | /extract，单URL、basic、markdown | Bearer API Key |
+| Exa MCP | https://mcp.exa.ai/mcp，仅声明web_search_exa、web_fetch_exa；搜索传query、objective及numResults=5 | web_fetch_exa，单URL、maxCharacters=100000，随后按应用10000字符分页 | 可选x-api-key；不使用OAuth或用户自定义地址 |
+
+Exa采用官方MCP SDK的Streamable HTTP连接，每次工具请求初始化、调用后关闭。只调用固定白名单，不自动导入其他工具。返回的结构化结果或官方Title／URL文本统一转成来源；格式不识别时明确失败，不当作零结果。远程响应保留4MiB、30秒、禁止重定向的限制。Exa免密钥限额及网络限制由官方控制，不能保证一直可用；需要生产额度时填写自己的密钥。
+
+验证使用本机Tavily HTTP／Exa MCP模拟服务，覆盖鉴权、初始化、白名单调用、结果转换、分页缓存、失败、密钥切换及取消保存。已只读核对官方工具列表，未执行真实收费搜索或抓取。配置清除行为对Exa是恢复免费模式，对另外两家是关闭可用状态。
+
+官方参考：[Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint/search)、[Tavily Extract](https://docs.tavily.com/documentation/api-reference/endpoint/extract)、[Exa MCP](https://docs.exa.ai/reference/exa-mcp)。

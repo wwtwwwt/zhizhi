@@ -41,7 +41,7 @@ Electron桌面版及本地Web预览已实现，应用名枝知／zhizhi，macOS�
 
 ## 当前实现
 
-React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型支持Chat Completions／Responses／Anthropic Messages，apiType及可选authType存现有模型JSON，未指定apiType时为chat；统一请求／事件转换在server/providers/protocol.ts，共用chat.ts流式生命周期。Responses每次发完整上下文、store=false，不依赖服务端会话；Messages独立system及图片source。默认固定模拟模型，无新表。联网自动模式使用AI SDK Core执行DeepSeek Search／Fetch循环，三种API均可用；工具协议、网页及执行记录仅本轮保留，不持久化，无新增表。关闭时沿用原单次请求。
+React19／TypeScript／Vite、Express5、Node24内置SQLite；服务端与前端共用Markdown AST、选区位置规范及SSE解析。模型支持Chat Completions／Responses／Anthropic Messages，apiType及可选authType存现有模型JSON，未指定apiType时为chat；统一请求／事件转换在server/providers/protocol.ts，共用chat.ts流式生命周期。Responses每次发完整上下文、store=false，不依赖服务端会话；Messages独立system及图片source。默认固定模拟模型，无新表。联网自动模式使用AI SDK Core执行DeepSeek／Tavily／Exa MCP搜索读取循环，三种API均可用；工具协议、网页及执行记录仅本轮保留，不持久化，无新增表。关闭时沿用原单次请求。
 
 数据默认`.learnhelper/`，LEARNHELPER_DATA_DIR覆盖。server/schema.sql直接初始化，无旧开发库升级；当前结构正常重启保留数据，残留任务恢复interrupted。浏览器预览Key存secrets.json的modelKeys；桌面版通过注入SecretCodec使用safeStorage加密同文件，权限0600，不返回前端。开发与正式桌面数据分别存系统应用数据目录的zhizhi-development／zhizhi，不自动迁移预览数据。
 
@@ -121,7 +121,7 @@ macOS Electron窗口使用原生sidebar vibrancy和隐藏标题栏，红黄绿�
 
 当前AI消息的二、三级标题目录显示于右上功能区，背景覆盖分支标签并在底部渐隐；二级12px／三级11px、紧凑行距和留白，默认可读灰色，当前章节及hover／键盘聚焦项文字加深，均无按钮底色；顶部左侧目录图标、右侧折叠按钮，展开收起有高度及淡入淡出动画，收起时禁用内部交互，支持减少动态效果偏好；颜色变量带浅色模式回退值；可跳转、跟随当前章节，正文不足阅读区1.2倍隐藏。通用showOutline默认开启，关闭时不渲染；目录和正文共用reading-surface纯色背景，底部以透明度遮罩渐隐，避免深色暗边；深色原生文本及公式选区使用深蓝底、浅色文字。主流和分支共用，流式、编辑及版本变化同步更新。 不同消息切换目录时，旧目录先淡出再展示新目录；出现和消失均有180ms透明度过渡，退出期间禁用交互，遵循系统减少动态效果偏好。
 
-联网配置复用secrets.json.searchKey（桌面safeStorage），在供应商页弹窗确认保存；配置后共用输入框图片／文件右侧显示关闭／自动，默认关闭，模式在当前页面内统一记忆（连续发送、新对话及分支沿用，刷新恢复关闭），fake禁用。重构沿用目标流输入框模式。工具记录经SSE仅当前job展示，结束消失；保存回答附带来源链接，后续不回灌原始工具结果。每轮最多8次模型请求、12次工具操作、3分钟，工具30秒；最终请求逐次检查上下文估算预算，停止取消当前请求。无MCP／Skill／自定义工具入口，未调用真实收费服务。
+联网配置复用secrets.json.searchKey（桌面safeStorage），在供应商页弹窗确认保存；配置后共用输入框图片／文件右侧显示关闭／自动，默认关闭，模式在当前页面内统一记忆（连续发送、新对话及分支沿用，刷新恢复关闭），fake禁用。重构沿用目标流输入框模式。工具记录经SSE仅当前job展示，结束消失；保存回答附带来源链接，后续不回灌原始工具结果。每轮最多8次模型请求、12次工具操作、3分钟，工具30秒；最终请求逐次检查上下文估算预算，停止取消当前请求。无通用MCP／Skill／自定义工具入口（Exa仅内置官方MCP适配），未调用真实收费服务。
 
 联网功能验证：58项相关代码检查、4项无截图浏览器检查、TypeScript／生产及Electron主进程构建通过。仅本机模拟服务，不读取真实用户配置或调用收费服务；实际供应商兼容及UI视觉仍需用户验收。
 
@@ -140,3 +140,5 @@ Markdown硬换行仅渲染保留偏移的newline，取消与br重复导致的空
 2026-11-17：应用外观经受限主框架IPC同步Electron nativeTheme.themeSource，原生vibrancy／Acrylic跟随应用的light／dark／system，避免深色页面叠在浅色系统材质上。侧栏透明背景、边框、悬停、选中及文件夹引导线按data-theme显式取色，浅色40%／深色5%保持。生产／主进程构建和macOS无截图桌面smoke通过，含人为设置浅色原生外观后切深色及恢复浅色／system；Windows原生效果未实机验证。
 
 文件夹管理弹窗通过Portal渲染到body，避免透明侧栏隔离层和overflow遮挡；新建／重命名／删除共用修复。生产构建及1项无截图浏览器检查通过，覆盖深色透明侧栏中新建、输入聚焦、保存及重命名退出。
+
+联网供应商弹窗可选DeepSeek／Tavily／Exa MCP；既有secrets文件保留DeepSeek searchKey，新增searchKeys按供应商保存密钥及searchProvider，不新增表。Exa可无Key使用官方限额，仅固定web_search_exa／web_fetch_exa，不导入远程提示或开放自定义MCP。生成快照记录所选供应商，工具记录仍不持久化。51项相关代码检查、3项无截图界面检查及生产／Electron主进程构建通过；外部工具列表只读核实，无真实搜索／抓取调用。

@@ -78,10 +78,10 @@ test('configuration remains private, off mode uses one original request and auto
   const send=async(path:string,method='GET',body?:unknown)=>fetch(url+'/api'+path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
   try{
     const saved=store.models.save({...model('chat',base+'/v1'),id:undefined,apiKey:'model-key'}),session=store.createSession();
-    expect(await(await send('/search-settings')).json()).toEqual({provider:'deepseek',configured:false});
+    expect(await(await send('/search-settings')).json()).toEqual({provider:'deepseek',configured:false,configuredProviders:{deepseek:false,tavily:false,exa:false}});
     expect(()=>store.appendQuestion(session.root_stream_id,'q',randomUUID(),{modelId:saved.id,webSearch:'auto'})).toThrow('配置联网');
     expect(store.stream(session.root_stream_id).messages).toHaveLength(0);
-    const response=await(await send('/search-settings','PUT',{apiKey:'search-key'})).json();expect(response).toEqual({provider:'deepseek',configured:true});
+    const response=await(await send('/search-settings','PUT',{apiKey:'search-key'})).json();expect(response).toEqual({provider:'deepseek',configured:true,configuredProviders:{deepseek:true,tavily:false,exa:false}});
     store.models.setKey(saved.id,'new-model-key');expect(store.secrets.read().searchKey).toBe('search-key');
     const result=store.appendQuestion(session.root_stream_id,'q',randomUUID(),{modelId:saved.id,webSearch:'off'});
     const events=await send(`/generations/${result.generationId}/events`);for await(const _ of readSSE(events.body!)){}

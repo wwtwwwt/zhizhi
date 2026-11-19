@@ -36,6 +36,13 @@ test('outline fades between answers and disappears for an answer without heading
   await page.emulateMedia({reducedMotion:'reduce'});
   const controls=page.getByRole('navigation',{name:'阅读定位',exact:true});
   await expect(controls.getByRole('button')).toHaveCount(4);
+  const firstControl=controls.getByRole('button').first();
+  await expect.poll(()=>firstControl.evaluate(el=>getComputedStyle(el).opacity)).toBe('0');
+  await page.locator('.workspace .conversation-scroll').hover({position:{x:50,y:100}});await page.mouse.wheel(0,1);
+  await expect.poll(()=>firstControl.evaluate(el=>getComputedStyle(el).opacity)).toBe('1');
+  await expect.poll(()=>firstControl.evaluate(el=>getComputedStyle(el).opacity)).toBe('0');
+  await controls.hover();await expect.poll(()=>firstControl.evaluate(el=>getComputedStyle(el).opacity)).toBe('1');
+
   await controls.getByRole('button',{name:'定位到下一条消息',exact:true}).click();await expect(outline).toContainText('后一回答');
   await controls.getByRole('button',{name:'定位到上一条消息',exact:true}).click();await expect(outline).toContainText('前一回答');
   const bottom=controls.getByRole('button',{name:'定位到底部',exact:true});

@@ -174,6 +174,13 @@ type ConversationProps = { blocked?: boolean; onReadingChange?: (streamId: strin
 function Conversation(props: ConversationProps) {
   const { streamId, depth, onSend } = props; const state = useAppState(); const stream = streamId ? state.streams[streamId] : undefined;
   const scroll = useRef<HTMLDivElement>(null), nearBottom = useRef(true), initiallyPositioned = useRef(false), manualGeneration = useRef(false), lastGeneration = useRef('');
+  const [readingControlsVisible,setReadingControlsVisible] = useState(false);
+  const readingControlsTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const showReadingControls = () => {
+    setReadingControlsVisible(true); clearTimeout(readingControlsTimer.current);
+    readingControlsTimer.current = setTimeout(() => setReadingControlsVisible(false), 1300);
+  };
+  useEffect(() => () => clearTimeout(readingControlsTimer.current), []);
   const [navCenter,setNavCenter]=useState<number | undefined>(undefined);
   const [readingBottom, setReadingBottom] = useState<number | undefined>(undefined);
   const [activeMessage, setActiveMessage] = useState<string | null>(null);
@@ -254,14 +261,14 @@ function Conversation(props: ConversationProps) {
     return () => { clearTimeout(timer); block.classList.remove('search-jump-highlight'); };
   }, [props.navigation?.token, streamId]);
   return <section className={`conversation ${empty ? 'empty' : ''} ${depth ? 'branch-conversation' : ''}`} inert={props.blocked}>
-    {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={stopFollowing} onTouchMove={stopFollowing} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
+    {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={()=>{stopFollowing();showReadingControls();}} onTouchMove={()=>{stopFollowing();showReadingControls();}} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
       <div className="messages"> { !stream && <div className="loading-label">正在打开对话…</div>}{stream?.messages.map(message => <MessageView key={message.id} message={message} {...props}/>)}<div className="end-space"/></div>
     </div>}
     {assistantCount >= 2 && <nav className="message-navigation" style={{top:navCenter}} aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onFocus={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
     {!empty && readingBottom !== undefined && <div className="conversation-bottom-fade" aria-hidden="true" style={{ top: readingBottom - 28 }}/>}
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><>{navPreview.question && <div className="nav-question-preview">{navPreview.question.slots.length ? navPreview.question.slots.map(s => s.node.selection_text).join(' ') : navPreview.question.content_markdown}</div>}<div className="nav-answer-preview">{(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join('\n\n') : navPreview.message.content_markdown).slice(0,1200)}</div></></div>}
     {state.settings?.showOutline === true && <MessageOutline scroll={scroll} messageId={outlineMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>}
-    {!empty && !!stream?.messages.length && <nav className="reading-navigation" aria-label="阅读定位">
+    {!empty && !!stream?.messages.length && <nav className={`reading-navigation ${readingControlsVisible ? 'revealed' : ''}`} aria-label="阅读定位">
       <button type="button" aria-label="定位到顶端" title="定位到顶端" onClick={()=>navigateReading('top')}><ArrowUpToLine size={13} strokeWidth={1.75}/></button>
       <button type="button" aria-label="定位到上一条消息" title="定位到上一条消息" onClick={()=>navigateReading('previous')}><ChevronUp size={13} strokeWidth={1.75}/></button>
       <button type="button" aria-label="定位到下一条消息" title="定位到下一条消息" onClick={()=>navigateReading('next')}><ChevronDown size={13} strokeWidth={1.75}/></button>

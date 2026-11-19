@@ -538,3 +538,8 @@ html.native-sidebar-blur[data-theme] .sidebar{background:var(--material-surface)
 .reading-navigation button{display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:3px;color:color-mix(in srgb,var(--neutral-4,#aaa) 60%,transparent);background:transparent;transition:color .15s ease}
 .reading-navigation button:hover,.reading-navigation button:focus-visible{color:var(--neutral-1,#242424);background:transparent}
 @media(prefers-reduced-motion:reduce){.reading-navigation button{transition:none}}
+
+.reading-navigation{padding:12px 8px;right:6px;bottom:2px}
+.reading-navigation button{opacity:0;pointer-events:none;transition:opacity .18s ease,color .15s ease}
+.reading-navigation.revealed button,.reading-navigation:hover button,.reading-navigation:focus-within button{opacity:1;pointer-events:auto}
+@media(prefers-reduced-motion:reduce){.reading-navigation button{transition:none}}

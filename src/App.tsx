@@ -262,10 +262,10 @@ function Conversation(props: ConversationProps) {
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><>{navPreview.question && <div className="nav-question-preview">{navPreview.question.slots.length ? navPreview.question.slots.map(s => s.node.selection_text).join(' ') : navPreview.question.content_markdown}</div>}<div className="nav-answer-preview">{(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join('\n\n') : navPreview.message.content_markdown).slice(0,1200)}</div></></div>}
     {state.settings?.showOutline === true && <MessageOutline scroll={scroll} messageId={outlineMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>}
     {!empty && !!stream?.messages.length && <nav className="reading-navigation" aria-label="阅读定位">
-      <button type="button" aria-label="定位到顶端" title="定位到顶端" onClick={()=>navigateReading('top')}><ArrowUpToLine size={16}/></button>
-      <button type="button" aria-label="定位到上一条消息" title="定位到上一条消息" onClick={()=>navigateReading('previous')}><ChevronUp size={16}/></button>
-      <button type="button" aria-label="定位到下一条消息" title="定位到下一条消息" onClick={()=>navigateReading('next')}><ChevronDown size={16}/></button>
-      <button type="button" aria-label="定位到底部" title="定位到底部" onClick={()=>navigateReading('bottom')}><ArrowDownToLine size={16}/></button>
+      <button type="button" aria-label="定位到顶端" title="定位到顶端" onClick={()=>navigateReading('top')}><ArrowUpToLine size={13} strokeWidth={1.75}/></button>
+      <button type="button" aria-label="定位到上一条消息" title="定位到上一条消息" onClick={()=>navigateReading('previous')}><ChevronUp size={13} strokeWidth={1.75}/></button>
+      <button type="button" aria-label="定位到下一条消息" title="定位到下一条消息" onClick={()=>navigateReading('next')}><ChevronDown size={13} strokeWidth={1.75}/></button>
+      <button type="button" aria-label="定位到底部" title="定位到底部" onClick={()=>navigateReading('bottom')}><ArrowDownToLine size={13} strokeWidth={1.75}/></button>
     </nav>}
     <Composer key={streamId || 'new'} streamId={streamId} busy={busy} onSend={onSend} compact={depth > 0}/>
   </section>;

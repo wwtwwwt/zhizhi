@@ -534,7 +534,7 @@ html.native-sidebar-blur[data-theme] .sidebar{background:var(--material-surface)
 .message-outline.compact .message-outline-compact svg{transform:rotate(180deg)}
 @media(prefers-reduced-motion:reduce){.message-outline-items,.outline-entry,.message-outline-compact svg{transition:none}}
 
-.reading-navigation{position:absolute;right:14px;bottom:14px;z-index:15;display:flex;flex-direction:column;gap:1px}
-.reading-navigation button{display:flex;align-items:center;justify-content:center;width:24px;height:24px;padding:4px;color:var(--neutral-4,#aaa);background:transparent;transition:color .15s ease}
+.reading-navigation{position:absolute;right:14px;bottom:14px;z-index:15;display:flex;flex-direction:column;gap:0}
+.reading-navigation button{display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:3px;color:color-mix(in srgb,var(--neutral-4,#aaa) 60%,transparent);background:transparent;transition:color .15s ease}
 .reading-navigation button:hover,.reading-navigation button:focus-visible{color:var(--neutral-1,#242424);background:transparent}
 @media(prefers-reduced-motion:reduce){.reading-navigation button{transition:none}}

@@ -33,7 +33,7 @@ resolve用AST移除展示图片，不展开document_resources，普通对话、�
 
 按标题生成文档名；arXiv HTML移除站点导航和错误说明尾部。相对资源按实际全文地址解析；PDF返回无法定位的相对图片时拒绝，并提示下载Markdown与图片后本地导入。转换器没有返回的图片不会自动补齐。
 
-请求超时120秒，关闭导入窗口取消。代理优先INKTOMD_PROXY、HTTPS_PROXY、HTTP_PROXY；未设置时探测本机127.0.0.1:7897，存在则使用，否则直连。使用undici fetch／ProxyAgent；此代理规则仅用于论文转换，不代表模型adapter采用同样代理。生产使用固定官方endpoint，测试允许注入本机stub。
+请求超时120秒，关闭导入窗口取消。代理统一跟随通用设置的系统代理／不使用代理，与模型及搜索共用请求层；不再探测固定代理端口。Electron系统模式读取系统代理，Web开发使用HTTP(S)_PROXY／NO_PROXY。生产使用固定官方endpoint，测试允许注入本机stub。
 
 ## 验证与限制
 
@@ -43,6 +43,6 @@ resolve用AST移除展示图片，不展开document_resources，普通对话、�
 
 桌面文件选择通过受鉴权保护的`GET /api/documents/picker`探测能力，`POST`打开系统文件选择器，返回文档及找到的引用资源；不接受前端传入任意文件路径。未找到的图片由原导入校验统一提示；仍须点击导入才写入数据库。
 
-其他文档的手动转换入口使用 [MinerU](https://mineru.net/OpenSourceTools/Extractor)，用户转换为 Markdown 后回来导入。论文链接自动转换仍使用 InkToMd，未更改其 API 或代理流程。
+其他文档的手动转换入口使用 [MinerU](https://mineru.net/OpenSourceTools/Extractor)，用户转换为 Markdown 后回来导入。论文链接自动转换仍使用 InkToMd，API保持不变，代理跟随通用设置。
 
 论文转换结果中，若InkToMd将内嵌图片截断为`data:image/png;base64...`等省略号占位，转换阶段移除无效图片引用并保留替代文字，避免网站LOGO阻止正文导入；仅处理这种明确的截断占位，不放宽普通Markdown导入的图片校验。正文远程图片照常保留。

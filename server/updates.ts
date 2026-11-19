@@ -1,3 +1,4 @@
+import { networkFetch as fetch } from './network';
 import { z } from 'zod';
 import type { Store } from './store';
 import { compareVersions, releaseVersion, releasesUrl, type Release, type UpdateStatus } from '../shared/updates';

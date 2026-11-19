@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { createConnection } from 'node:net';
-import { ProxyAgent, fetch } from 'undici';
+import { networkFetch as fetch } from './network';
 import { AppError, type Store } from './store';
 import { nodeTree, parseTree, printTree, splitMarkdown } from '../shared/markdown';
 import { imageNodes, resourcePath, safeImageUrl, visitAst, type DocumentImport } from '../shared/documents';
@@ -77,21 +76,12 @@ export function paperUrl(value: string) {
   }
   return url.href;
 }
-async function proxyFor(endpoint: string) {
-  if (new URL(endpoint).hostname === '127.0.0.1') return undefined;
-  const configured = process.env.INKTOMD_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
-  if (configured) return new ProxyAgent(configured);
-  // The user's local dev proxy. A missing proxy must not prevent direct use.
-  const available = await new Promise<boolean>(resolve => { const socket = createConnection({host:'127.0.0.1',port:7897}); const done = (ok:boolean) => { socket.destroy(); resolve(ok); }; socket.setTimeout(150,()=>done(false)); socket.once('connect',()=>done(true)); socket.once('error',()=>done(false)); });
-  return available ? new ProxyAgent('http://127.0.0.1:7897') : undefined;
-}
 export async function convertPaper(value: string, endpoint = 'https://www.inktomd.com/api/convert-url', signal?: AbortSignal) {
   let url: string;
   try { url = paperUrl(value); } catch (e) { throw e instanceof AppError ? e : new AppError(400,'INVALID_URL','请输入有效的论文链接或 arXiv ID'); }
-  const dispatcher = await proxyFor(endpoint);
   const timeout = AbortSignal.timeout(120_000), combined = signal ? AbortSignal.any([timeout,signal]) : timeout;
   const request = async (target: string) => {
-    const response = await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:target}),signal:combined,...(dispatcher ? {dispatcher} : {})});
+    const response = await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:target}),signal:combined});
     if (!response.ok) { await response.body?.cancel(); throw new AppError(502,'PAPER_CONVERSION_FAILED', response.status === 429 ? 'InkToMd 请求次数已达上限，请稍后再试' : `InkToMd 转换失败（${response.status}）`); }
     const reader = response.body!.getReader(); const chunks: Uint8Array[] = []; let size = 0;
     try { while (true) { const {done,value} = await reader.read(); if (done) break; size += value.length; if (size > maxMarkdown * 2) throw new AppError(502,'PAPER_TOO_LARGE','转换结果超过大小限制'); chunks.push(value); } }
@@ -123,5 +113,4 @@ export async function convertPaper(value: string, endpoint = 'https://www.inktom
     if (new URL(url).pathname.startsWith('/pdf/') && imageNodes(markdown).some(n => !/^https?:|^data:/i.test(n.url || ''))) throw new AppError(502,'MISSING_PAPER_IMAGES','InkToMd 返回了没有下载地址的图片。请下载 Markdown 和图片后从文件导入。');
     return { name: `${name}.md`, markdown, resources: [], baseUrl: url, sourceUrl: value } satisfies DocumentImport;
   } catch(e) { throw e instanceof AppError ? e : new AppError(502,'PAPER_CONVERSION_FAILED', combined.aborted ? '论文转换已取消或超时，请重试' : '无法连接 InkToMd，请检查网络或代理后重试'); }
-  finally { await dispatcher?.close(); }
 }

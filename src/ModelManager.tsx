@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Trash2, RefreshCw, X, Copy, SlidersHorizontal, ChevronLeft, Check, ArrowRight } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, X, Copy, SlidersHorizontal, ChevronLeft, Check, ArrowRight, Share2, Download } from 'lucide-react';
 import { api, loadModels, loadSettings, notify, useAppState } from './client';
 import { apiLabels, defaultParameters, validateParameters, type ApiType, type ModelConfig, type ModelImportSource, type ModelParameter } from '../shared/models';
 import { SearchSettings } from './SearchSettings';
@@ -21,12 +21,15 @@ const shortName = (id: string) => (id.trim().split('/').at(-1) || '').split('-')
 export function ModelManager() {
   const state = useAppState();
   const [editing, setEditing] = useState<ModelConfig | 'new' | null>(null);
+  const [sharing,setSharing] = useState<ModelConfig | 'import' | null>(null);
   return <>
+    {sharing && <ModelShare model={sharing === 'import' ? undefined : sharing} onClose={()=>setSharing(null)}/>}
     {editing && <WindowPanel title="配置模型" onClose={() => setEditing(null)}><ModelEditor key={typeof editing === 'string' ? editing : editing.id || 'copy'} model={editing === 'new' ? undefined : editing} onBack={() => setEditing(null)}/></WindowPanel>}
-    <div className="model-manager-body" inert={!!editing}>
-      <div className="model-list-heading"><span>模型</span><button className="secondary-button" onClick={() => setEditing('new')}><Plus size={14}/>添加模型</button></div>
+    <div className="model-manager-body" inert={!!editing || !!sharing}>
+      <div className="model-list-heading"><span>模型</span><div className="model-list-actions"><button className="secondary-button" onClick={()=>setSharing('import')}><Download size={14}/>导入分享码</button><button className="secondary-button" onClick={() => setEditing('new')}><Plus size={14}/>添加模型</button></div></div>
       <div className="model-list">{state.models.map(model => <div className="model-row" key={model.id} title={`模型：${model.name}`}>
         <button onClick={() => setEditing(model)}><strong>{model.name}</strong><span>{model.fixed ? '内置模拟模型' : model.model}</span></button>
+        {!model.fixed && <button className="icon-button" aria-label={`分享模型：${model.name}`} title="导出分享码" onClick={()=>setSharing(model)}><Share2 size={14}/></button>}
         {!model.fixed && <button className="icon-button" aria-label={`复制模型：${model.name}`} title="复制模型配置" onClick={() => setEditing({ ...model, id: '', name: `${model.name} 副本`, hasApiKey: false })}><Copy size={14}/></button>}
         <button className="icon-button" aria-label={`编辑模型：${model.name}`} title="配置模型" onClick={() => setEditing(model)}><SlidersHorizontal size={14}/></button>
         {!model.fixed && <button className="icon-button" aria-label={`删除模型：${model.name}`} title="删除模型" onClick={async () => {
@@ -37,6 +40,19 @@ export function ModelManager() {
       <SearchSettings/>
     </div>
   </>;
+}
+
+function ModelShare({model,onClose}:{model?:ModelConfig;onClose:()=>void}) {
+  const [code,setCode]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [preview,setPreview]=useState<{name:string;baseUrl:string;model:string;apiType:ApiType;hasApiKey:boolean}|null>(null);
+  useEffect(()=>{if(!model)return;let active=true;void api<{code:string}>(`/models/${model.id}/share`,'POST').then(value=>{if(active)setCode(value.code);}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[model]);
+  return <WindowPanel title={model ? '分享模型' : '导入分享码'} onClose={()=>{if(!busy)onClose();}}><form className="model-editor model-share-form" onSubmit={async e=>{e.preventDefault();setBusy(true);setError('');try{if(model){await navigator.clipboard.writeText(code);notify('分享码已复制');}else if(!preview){setPreview(await api('/models/share/preview','POST',{code}));}else{await api('/models/share/import','POST',{code});await loadModels();onClose();notify('模型已导入');}}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>
+    <p className="model-form-intro">{model ? '分享码包含 API Key 和完整模型配置，请仅分享给可信的人。分享码只是编码，不是加密。' : '粘贴枝知模型分享码，确认配置后即可导入使用。'}</p>
+    <label className="field">分享码<textarea aria-label="模型分享码" spellCheck={false} autoComplete="off" readOnly={!!model} disabled={busy} value={code} onChange={e=>{setCode(e.target.value);setPreview(null);setError('');}} rows={6}/></label>
+    {preview && <div className="model-share-preview"><strong>{preview.name}</strong><span>{preview.model}</span><span>{preview.baseUrl}</span><span>{apiLabels[preview.apiType]} · {preview.hasApiKey ? '包含 API Key' : '无 API Key（免密钥服务可直接使用）'}</span></div>}
+    {error && <p role="alert" className="config-error">{error}</p>}
+    <div className="model-editor-actions"><button type="button" className="secondary-button" disabled={busy} onClick={onClose}>取消</button><button type="submit" className="primary-button" disabled={busy || !code.trim()}>{busy ? '处理中…' : model ? '复制分享码' : preview ? '导入模型' : '读取配置'}</button></div>
+  </form></WindowPanel>;
 }
 
 function ModelEditor({ model, onBack }: { model?: ModelConfig; onBack: () => void }) {

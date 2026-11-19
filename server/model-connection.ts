@@ -1,3 +1,4 @@
+import { networkFetch as fetch } from './network';
 import type { ApiType, ModelConfig } from '../shared/models';
 import { AppError } from './store';
 import { endpoint, authHeaders, ResponseIncompleteError } from './providers/protocol';

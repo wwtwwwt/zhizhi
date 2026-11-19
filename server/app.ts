@@ -1,3 +1,5 @@
+import { validateParameters } from '../shared/models';
+import { withNetwork, nodeNetwork, type ProxyMode } from './network';
 import { publicSearchConfig, saveSearchConfig } from './search-config';
 import { renderPrompt } from './prompts';
 import { UpdateChecker } from './updates';
@@ -18,12 +20,14 @@ import { discoverModels, checkModel } from './model-connection';
 const requestId = z.string().uuid();
 const question = z.string().trim().min(1, '请输入问题').max(30_000);
 const idParam = (req: Request) => String(req.params.id);
-export function createApp(store: Store, options: { searchEndpoint?: string; readModelImports?: () => Promise<ImportCandidate[]>; releaseVersion?: string; paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
+export function createApp(store: Store, options: { networkRequest?: typeof fetch; onProxyChange?: (mode: ProxyMode) => Promise<void>; searchEndpoint?: string; readModelImports?: () => Promise<ImportCandidate[]>; releaseVersion?: string; paperEndpoint?: string; staticDir?: string; apiToken?: string; allowedOrigins?: string[]; pickDocument?: () => Promise<import('../shared/documents').DocumentImport | null> } = {}) {
   const app = express();
   const updates = new UpdateChecker(store, options.releaseVersion);
   const active = new Map<string, AbortController>();
   const activeDrafts = new Map<string, () => string>();
   const modelImports = new ModelImportCache(options.readModelImports);
+  const request = options.networkRequest || nodeNetwork(() => store.settings().proxyMode);
+  app.use((_req, _res, next) => withNetwork(request, next));
   app.disable('x-powered-by');
   app.use('/api', (req, res, next) => {
     if (options.apiToken && req.get('x-zhizhi-token') !== options.apiToken && req.get('authorization') !== `Bearer ${options.apiToken}`) {
@@ -69,6 +73,26 @@ export function createApp(store: Store, options: { searchEndpoint?: string; read
     res.json(saveSearchConfig(store.secrets,data));
   });
   app.get('/api/models', (_req, res) => res.json(store.models.list()));
+  const shareInput = z.object({ code:z.string().trim().min(1).max(100000) });
+  const decodeShare = (body: unknown) => {
+    const {code} = shareInput.parse(body);
+    if (!/^zhizhi:model:1:[A-Za-z0-9_-]+$/.test(code)) throw new AppError(400,'INVALID_SHARE','分享码格式无效');
+    try { return modelInput.omit({importSourceId:true,clearApiKey:true}).parse(JSON.parse(Buffer.from(code.slice('zhizhi:model:1:'.length),'base64url').toString('utf8'))); }
+    catch { throw new AppError(400,'INVALID_SHARE','分享码内容无效或不受支持'); }
+  };
+  app.post('/api/models/:id/share', (req,res) => {
+    const model = store.models.get(idParam(req));
+    if (model.fixed) throw new AppError(400,'FIXED_MODEL','模拟模型无需分享');
+    const {name,baseUrl,model:modelId,supportsImages,parameters,apiType,authType} = model;
+    const config = {name,baseUrl,model:modelId,supportsImages,parameters,apiType:apiType || 'chat',authType,apiKey:store.models.key(model.id)};
+    res.set('Cache-Control','no-store').json({code:'zhizhi:model:1:'+Buffer.from(JSON.stringify(config)).toString('base64url')});
+  });
+  app.post('/api/models/share/preview', (req,res) => {
+    const config=decodeShare(req.body);
+    const error = validateParameters(config.parameters); if(error)throw new AppError(400,'INVALID_SHARE',error);
+    res.set('Cache-Control','no-store').json({name:config.name,baseUrl:config.baseUrl,model:config.model,apiType:config.apiType,hasApiKey:!!config.apiKey});
+  });
+  app.post('/api/models/share/import', (req,res) => res.json(saveModel(decodeShare(req.body))));
   app.post('/api/models', (req, res) => res.json(saveModel(modelInput.parse(req.body))));
   app.put('/api/models/:id', (req, res) => {
     if (idParam(req) === 'fake') { const { fakeDelay } = z.object({ fakeDelay: z.number().int().min(0).max(250) }).parse(req.body); store.saveSettings({ ...store.settings(), fakeDelay }); res.json(store.models.get('fake')); }
@@ -150,8 +174,8 @@ export function createApp(store: Store, options: { searchEndpoint?: string; read
   app.post('/api/updates/check', async (req,res) => { const data=z.object({manual:z.boolean().default(false)}).parse(req.body); res.json(await updates.check(data.manual)); });
   app.get('/api/settings/reply-system', (_req, res) => res.json({ defaultPrompt: renderPrompt('replySystem') }));
   app.get('/api/settings', (_req, res) => res.json(store.settings()));
-  app.put('/api/settings', (req, res) => {
-    const data = z.object({ externalLinks:z.boolean().optional(), theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), autoScroll:z.boolean().optional(), showOutline:z.boolean().optional(), blurBackdrop:z.boolean().optional(), sidebarBlur:z.boolean().optional(), replySystem:z.string().max(32000).nullable().optional(), updateNotifications:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); res.json(store.saveSettings({ ...store.settings(), ...data }));
+  app.put('/api/settings', async (req, res) => {
+    const data = z.object({ proxyMode:z.enum(['system','direct']).optional(), externalLinks:z.boolean().optional(), theme: z.enum(['light','dark','system']).optional(), stackDirection: z.enum(['up','left']).optional(), nickname:z.string().trim().min(1).max(40).optional(), fontSize:z.number().int().min(12).max(22).optional(), sendShortcut:z.enum(['enter','mod-enter']).optional(), confirmDeletion:z.boolean().optional(), autoScroll:z.boolean().optional(), showOutline:z.boolean().optional(), blurBackdrop:z.boolean().optional(), sidebarBlur:z.boolean().optional(), replySystem:z.string().max(32000).nullable().optional(), updateNotifications:z.boolean().optional(), fakeDelay: z.number().int().min(0).max(250).optional() }).parse(req.body); if (data.proxyMode) await options.onProxyChange?.(data.proxyMode); res.json(store.saveSettings({ ...store.settings(), ...data }));
   });
   app.post('/api/fake/v1/chat/completions', async (req, res) => {
     const d = z.object({ messages: z.array(z.object({ role: z.string(), content: z.union([z.string(), z.array(z.unknown())]) })), stream: z.literal(true), __fake: z.object({ kind: z.enum(['reply','branch','rewrite']), depth: z.number().int().min(0).max(500), delay: z.number().min(0).max(250), failure: z.enum(['error','disconnect']).optional() }) }).parse(req.body);

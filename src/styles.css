@@ -522,3 +522,14 @@ html.native-sidebar-blur[data-theme] .sidebar{background:var(--material-surface)
 .message-outline-actions{display:flex;align-items:center;gap:1px}
 .message-outline-compact{display:flex;align-items:center;padding:3px 5px;color:inherit}
 .message-outline-compact:hover,.message-outline-compact[aria-pressed=true]{color:var(--neutral-1,#242424);background:transparent}
+
+.model-list-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.model-share-form textarea{width:100%;resize:vertical;min-height:100px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--reading-surface);color:inherit;overflow-wrap:anywhere;font-family:monospace;font-size:12px}
+.model-share-preview{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:6px;font-size:12px;overflow-wrap:anywhere}
+.message-outline-items{transition:max-height .2s ease}
+.outline-entry{display:grid;grid-template-rows:1fr;opacity:1;transition:grid-template-rows .2s ease,opacity .2s ease}
+.outline-entry-clip{min-height:0;overflow:hidden}
+.message-outline.compact .outline-entry-sub{grid-template-rows:0fr;opacity:0}
+.message-outline-compact svg{transition:transform .2s ease}
+.message-outline.compact .message-outline-compact svg{transform:rotate(180deg)}
+@media(prefers-reduced-motion:reduce){.message-outline-items,.outline-entry,.message-outline-compact svg{transition:none}}

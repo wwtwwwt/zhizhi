@@ -137,7 +137,10 @@ test('long document outline compacts to six rows and navigation appears with two
   const outline=page.getByRole('navigation',{name:'当前回答目录'});
   await expect(outline.locator('.message-outline-items button')).toHaveCount(24);
   await outline.getByRole('button',{name:'精简目录',exact:true}).click();
-  await expect(outline.locator('.message-outline-items button')).toHaveCount(12);
+  await expect(outline.getByRole('button', {name:/^章节/})).toHaveCount(12);
+  const hidden=outline.locator('.outline-entry-sub').first();
+  await expect.poll(()=>hidden.evaluate(el=>el.getBoundingClientRect().height)).toBe(0);
+  expect(await hidden.evaluate(el=>getComputedStyle(el).transitionDuration)).toContain('0.2s');
   const items=outline.locator('.message-outline-items');
   const sizes=await items.evaluate(el=>({height:el.clientHeight,total:el.scrollHeight,row:el.querySelector('button')!.getBoundingClientRect().height}));
   expect(sizes.height).toBeLessThanOrEqual(sizes.row*6+5);expect(sizes.total).toBeGreaterThan(sizes.height);

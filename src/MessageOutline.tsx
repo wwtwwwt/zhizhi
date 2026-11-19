@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { ChevronDown, ListTree, ListFilter } from 'lucide-react';
+import { ChevronDown, ListTree, ChevronsDownUp } from 'lucide-react';
 
 type Heading = { element: HTMLElement; text: string; level: number };
 type Outline = { messageId: string; headings: Heading[]; left: number; top: number; width: number; height: number; active: number };
@@ -63,11 +63,11 @@ export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefO
   if (!presented) return null;
   const activeIndex = compact ? presented.headings.findLastIndex((heading, index) => index <= presented.active && heading.level === 2) : presented.active;
   return <nav className={`message-outline ${collapsed ? 'collapsed' : ''} ${compact ? 'compact' : ''} ${visible ? 'visible' : ''}`} inert={!visible} aria-hidden={!visible} aria-label="当前回答目录" style={{ left: presented.left, top: presented.top, width: presented.width }}>
-    <div className="message-outline-heading"><ListTree size={14} aria-hidden="true"/><div className="message-outline-actions"><button className="message-outline-compact" aria-label={compact ? '显示全部标题' : '精简目录'} title={compact ? '显示全部标题' : '精简目录：仅二级标题，最多六行'} aria-pressed={compact} onClick={() => setCompact(value => !value)}><ListFilter size={14}/></button><button className="message-outline-toggle" aria-label={collapsed ? '展开目录' : '收起目录'} title={collapsed ? '展开目录' : '收起目录'} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}><ChevronDown size={14}/></button></div></div>
-    <div className="message-outline-collapse" inert={collapsed} aria-hidden={collapsed}><div className="message-outline-clip"><div className="message-outline-items" style={{ maxHeight: compact ? Math.min(presented.height, 6 * 22.8 + 4) : presented.height }}>{presented.headings.map((heading, index) => (!compact || heading.level === 2) && <button key={index} className={heading.level === 3 ? 'outline-subheading' : undefined} aria-current={activeIndex === index ? 'location' : undefined} title={heading.text} onClick={() => {
+    <div className="message-outline-heading"><ListTree size={14} aria-hidden="true"/><div className="message-outline-actions"><button className="message-outline-compact" aria-label={compact ? '显示全部标题' : '精简目录'} title={compact ? '显示全部标题' : '精简目录：仅二级标题，最多六行'} aria-pressed={compact} onClick={() => setCompact(value => !value)}><ChevronsDownUp size={14}/></button><button className="message-outline-toggle" aria-label={collapsed ? '展开目录' : '收起目录'} title={collapsed ? '展开目录' : '收起目录'} aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}><ChevronDown size={14}/></button></div></div>
+    <div className="message-outline-collapse" inert={collapsed} aria-hidden={collapsed}><div className="message-outline-clip"><div className="message-outline-items" style={{ maxHeight: compact ? Math.min(presented.height, 6 * 22.8 + 4) : presented.height }}>{presented.headings.map((heading, index) => <div key={index} className={`outline-entry ${heading.level === 3 ? 'outline-entry-sub' : ''}`} inert={compact && heading.level === 3} aria-hidden={compact && heading.level === 3}><div className="outline-entry-clip"><button className={heading.level === 3 ? 'outline-subheading' : undefined} aria-current={activeIndex === index ? 'location' : undefined} title={heading.text} onClick={() => {
       const viewport = scroll.current; if (!viewport) return;
       onNavigate();
       viewport.scrollTo({ top: viewport.scrollTop + heading.element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 12, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
-    }}>{heading.text}</button>)}</div></div></div>
+    }}>{heading.text}</button></div></div>)}</div></div></div>
   </nav>;
 }

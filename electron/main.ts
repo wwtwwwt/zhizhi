@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { installLinkView } from './link-view';
 import { Store } from '../server/store';
 import { createApp } from '../server/app';
+import { localAddress, type ProxyMode } from '../server/network';
 import { readLocalDocument } from '../server/local-document';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -46,8 +47,16 @@ async function start() {
     encode: text => JSON.stringify({encrypted: safeStorage.encryptString(text).toString('base64')}),
     decode: text => safeStorage.decryptString(Buffer.from(JSON.parse(text).encrypted, 'base64')),
   });
+  const systemNetwork = session.fromPartition('zhizhi-network-system');
+  const directNetwork = session.fromPartition('zhizhi-network-direct');
+  await systemNetwork.setProxy({mode:'system'}); await directNetwork.setProxy({mode:'direct'});
+  const applyProxy = async (mode: ProxyMode) => {
+    await Promise.all([session.defaultSession, session.fromPartition('zhizhi-link-reader')].map(async value => { await value.setProxy({mode}); await value.closeAllConnections(); }));
+  };
+  await applyProxy(store.settings().proxyMode);
+  const networkRequest: typeof fetch = (input, init) => (localAddress(input) || store!.settings().proxyMode === 'direct' ? directNetwork : systemNetwork).fetch(input instanceof URL ? input.href : input, init);
   const token = randomBytes(32).toString('hex');
-  const service = createApp(store, {apiToken:token, pickDocument:async()=>{const selected=await dialog.showOpenDialog({title:'选择 Markdown 文件',properties:['openFile'],filters:[{name:'Markdown',extensions:['md','markdown']}]});return selected.canceled || !selected.filePaths[0] ? null : readLocalDocument(selected.filePaths[0]);}, staticDir:join(here,'../dist'), allowedOrigins:hot?['http://127.0.0.1:5174']:[]});
+  const service = createApp(store, {networkRequest,onProxyChange:applyProxy,apiToken:token, pickDocument:async()=>{const selected=await dialog.showOpenDialog({title:'选择 Markdown 文件',properties:['openFile'],filters:[{name:'Markdown',extensions:['md','markdown']}]});return selected.canceled || !selected.filePaths[0] ? null : readLocalDocument(selected.filePaths[0]);}, staticDir:join(here,'../dist'), allowedOrigins:hot?['http://127.0.0.1:5174']:[]});
   active = service.active;
   server = createServer(service.app);
   // Reusing the assigned port preserves same-origin browser preferences between launches.

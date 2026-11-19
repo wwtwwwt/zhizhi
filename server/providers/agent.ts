@@ -1,3 +1,4 @@
+import { networkFetch as fetch } from '../network';
 import { streamText, isStepCount, type ModelMessage } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';

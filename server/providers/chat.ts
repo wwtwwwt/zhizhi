@@ -1,3 +1,4 @@
+import { networkFetch as fetch } from '../network';
 import { readSSE } from '../../shared/sse';
 import type { ModelConfig } from '../../shared/models';
 import { endpoint, authHeaders, requestBody, responseEvents, type ModelEvent } from './protocol';

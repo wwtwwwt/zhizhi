@@ -48,7 +48,7 @@ export function MessageOutline({ scroll, messageId, onNavigate }: { scroll: RefO
       let low = 0, high = headings.length;
       while (low < high) { const middle = (low + high) >>> 1; if (headings[middle].element.getBoundingClientRect().top <= bounds.top + 48) low = middle + 1; else high = middle; }
       const current = low - 1;
-      const next = { messageId: messageId!, headings, left: area.left - parent.left, top: bounds.top - parent.top, width: area.width, height: Math.max(60, Math.min(300, viewport.clientHeight * .45)), active: current };
+      const next = { messageId: messageId!, headings, left: area.left - parent.left, top: bounds.top - parent.top, width: Math.max(0, bounds.left + viewport.clientWidth - area.left - 12), height: Math.max(60, Math.min(300, viewport.clientHeight * .45)), active: current };
       setOutline(previous => previous && previous.messageId === next.messageId && previous.headings === headings && previous.active === current && previous.left === next.left && previous.top === next.top && previous.width === next.width && previous.height === next.height ? previous : next);
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };

@@ -160,3 +160,5 @@ Markdown硬换行仅渲染保留偏移的newline，取消与br重复导致的空
 2026-11-19：通用proxyMode默认system，可切direct，复用preferences。server/network.ts通过请求作用域统一外部fetch；Electron独立system／direct网络session，支持系统PAC，主窗口与网页查看器同步模式，loopback直连。Web开发使用环境HTTP(S)_PROXY／NO_PROXY，忽略旧InkToMd专用代理及固定7897端口探测。供应商单模型完整分享码包含API Key（用户明确要求）、协议／鉴权／图片／全部参数，显式导出、主动复制、预览确认导入新模型；常规列表不泄密，不新增表。目录精简使用双向内收箭头，三级条目高度／透明度及列表最大高度动画。
 
 本轮验证：25项分享码／请求隔离／搜索／论文／更新相关检查、5项无截图浏览器检查及TypeScript／生产／Electron主进程构建通过，macOS桌面smoke通过。均使用合成密钥及本机模拟服务，不调用收费服务；真实系统代理／PAC网络及Windows代理尚未实机验证。
+
+目录宽度不再局限于消息右栏宽度，延伸到阅读视口右缘内12px，排除正文滚动条，左侧对齐不变。类型及差异检查通过。

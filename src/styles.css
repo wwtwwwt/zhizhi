@@ -518,3 +518,7 @@ html.native-sidebar-blur[data-theme] .sidebar{background:var(--material-surface)
 .link-view-address{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--neutral-2)}
 .link-view-external{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;font-size:11px;padding:4px;color:var(--neutral-3);margin-left:10px;margin-right:8px}.link-view-external:hover{color:var(--neutral-1)}
 .link-hover-preview{position:fixed;z-index:25000;width:320px;max-width:calc(100vw - 24px);padding:10px 12px;background:var(--paper,var(--neutral-8,#fff));border:1px solid var(--line);border-radius:7px;box-shadow:0 4px 16px #00000012;pointer-events:none;font-size:12px;line-height:1.5;animation:appear .12s ease}.link-hover-preview>div{display:flex;align-items:center;gap:7px;color:var(--neutral-2)}.link-hover-preview strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}.link-hover-preview>span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;color:var(--neutral-3);font-size:11px;margin-top:4px}
+
+.message-outline-actions{display:flex;align-items:center;gap:1px}
+.message-outline-compact{display:flex;align-items:center;padding:3px 5px;color:inherit}
+.message-outline-compact:hover,.message-outline-compact[aria-pressed=true]{color:var(--neutral-1,#242424);background:transparent}

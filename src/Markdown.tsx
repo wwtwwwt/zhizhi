@@ -1,4 +1,4 @@
-import { Fragment, createElement, useCallback, useMemo, useState } from 'react';
+import { Fragment, createElement, useCallback, useMemo, useState, useRef, useLayoutEffect, memo } from 'react';
 import { nodeTree } from '../shared/markdown';
 import type { Anchor, Ast } from '../shared/types';
 import katex from 'katex';
@@ -18,7 +18,16 @@ function Formula({ value, display, streaming }: { value: string; display: boolea
   return <span className="formula-render" aria-hidden="true" dangerouslySetInnerHTML={{ __html: html }}/>;
 }
 
-export function Markdown({ source, anchors = [], onBranch, activeBranchId, onActiveBranch, streaming = false }: { source: string; anchors?: Anchor[]; onBranch?: (a: Anchor) => void; activeBranchId?: string | null; onActiveBranch?: (id: string | null) => void; streaming?: boolean }) {
+type MarkdownProps = { source: string; anchors?: Anchor[]; onBranch?: (a: Anchor) => void; activeBranchId?: string | null; onActiveBranch?: (id: string | null) => void; streaming?: boolean };
+const emptyAnchors: Anchor[] = [];
+export function Markdown(props: MarkdownProps) {
+  const handlers = useRef(props);
+  useLayoutEffect(() => { handlers.current = props; });
+  const onBranch = useCallback((anchor: Anchor) => handlers.current.onBranch?.(anchor), []);
+  const onActiveBranch = useCallback((id: string | null) => handlers.current.onActiveBranch?.(id), []);
+  return <MarkdownContent {...props} anchors={props.anchors || emptyAnchors} onBranch={onBranch} onActiveBranch={onActiveBranch}/>;
+}
+const MarkdownContent = memo(function MarkdownContent({ source, anchors = emptyAnchors, onBranch, activeBranchId, onActiveBranch, streaming = false }: MarkdownProps) {
   const tree = useMemo(() => nodeTree(source).tree, [source]);
   const leaf = (node: Ast, key: string) => {
     const value = node.value || '', start = node.offset || 0, end = start + value.length;
@@ -80,4 +89,4 @@ export function Markdown({ source, anchors = [], onBranch, activeBranchId, onAct
     }
   };
   return <>{render(tree, 'root')}</>;
-}
+});

@@ -187,13 +187,16 @@ function Conversation(props: ConversationProps) {
     nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     const limit = el.getBoundingClientRect().top + 36;
     const messages = [...el.querySelectorAll<HTMLElement>('[data-message]')];
-    const reading = messages.filter(message => message.getBoundingClientRect().top <= limit).at(-1) || messages[0];
+    let reading: HTMLElement | undefined, current: HTMLElement | undefined, outlineCurrent: HTMLElement | undefined;
+    for (const message of messages) {
+      const before = message.getBoundingClientRect().top <= limit;
+      if (!reading || before) reading = message;
+      if (message.classList.contains('message-assistant') && (!current || before)) current = message;
+      if ((message.classList.contains('message-assistant') || message.hasAttribute('data-document')) && (!outlineCurrent || before)) outlineCurrent = message;
+      if (!before && reading && current && outlineCurrent) break;
+    }
     if (streamId) props.onReadingChange?.(streamId, reading?.dataset.message || null);
-    const assistantMessages = messages.filter(m => m.classList.contains('message-assistant'));
-    const current = assistantMessages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || assistantMessages[0];
     setActiveMessage(current?.dataset.message || null);
-    const outlineMessages = messages.filter(m => m.classList.contains('message-assistant') || m.hasAttribute('data-document'));
-    const outlineCurrent = outlineMessages.filter(m => m.getBoundingClientRect().top <= limit).at(-1) || outlineMessages[0];
     setOutlineMessage(outlineCurrent?.dataset.message || null);
   };
   const jumpToMessage = (id: string) => {
@@ -241,7 +244,7 @@ function Conversation(props: ConversationProps) {
     {empty ? <div className="welcome"><h1>想从哪里开始？</h1>{props.onImported && <ImportActions onImported={props.onImported}/>}</div> : <div className="conversation-scroll" ref={scroll} onWheel={stopFollowing} onTouchMove={stopFollowing} onScroll={syncPosition} onMouseDown={e => { if (!(e.target as HTMLElement).closest('mark')) props.onDismissSelection(); }}>
       <div className="messages"> { !stream && <div className="loading-label">正在打开对话…</div>}{stream?.messages.map(message => <MessageView key={message.id} message={message} {...props}/>)}<div className="end-space"/></div>
     </div>}
-    {assistantCount >= 3 && <nav className="message-navigation" style={{top:navCenter}} aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onFocus={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
+    {assistantCount >= 2 && <nav className="message-navigation" style={{top:navCenter}} aria-label="消息定位" onMouseLeave={() => setNavPreview(null)}>{stream?.messages.map((message, i) => message.role === 'assistant' ? <button key={message.id} aria-label={`跳转到第 ${i + 1} 条消息：AI`} aria-current={activeMessage === message.id ? 'location' : undefined} onMouseEnter={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onFocus={e => { const previous=stream.messages[i-1]; showNavPreview(message,e.currentTarget,previous?.role==='user'?previous:undefined); }} onBlur={() => setNavPreview(null)} onClick={() => { jumpToMessage(message.id); setNavPreview(null); }}><span/></button> : null)}</nav>}
     {!empty && readingBottom !== undefined && <div className="conversation-bottom-fade" aria-hidden="true" style={{ top: readingBottom - 28 }}/>}
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><>{navPreview.question && <div className="nav-question-preview">{navPreview.question.slots.length ? navPreview.question.slots.map(s => s.node.selection_text).join(' ') : navPreview.question.content_markdown}</div>}<div className="nav-answer-preview">{(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join('\n\n') : navPreview.message.content_markdown).slice(0,1200)}</div></></div>}
     {state.settings?.showOutline === true && <MessageOutline scroll={scroll} messageId={outlineMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>}
@@ -261,12 +264,11 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
     const document = documentRef.current; if (!document || !toolsHost) return;
     let frame = 0;
     const update = () => {
-      const sections = [...toolsHost.querySelectorAll<HTMLElement>('[data-slot-tools]')].sort((a, b) => {
-        const top = (section: HTMLElement) => document.querySelector<HTMLElement>(`[data-slot="${section.dataset.slotTools}"]`)?.offsetTop || 0;
-        return top(a) - top(b);
-      });
+      if (!toolsHost.childElementCount) { document.style.minHeight = '0px'; return; }
+      const blocks = new Map([...document.querySelectorAll<HTMLElement>('[data-slot]')].map(block => [block.dataset.slot!, block]));
+      const sections = [...toolsHost.querySelectorAll<HTMLElement>('[data-slot-tools]')].sort((a, b) => (blocks.get(a.dataset.slotTools!)?.offsetTop || 0) - (blocks.get(b.dataset.slotTools!)?.offsetTop || 0));
       const items = sections.flatMap(section => {
-        const block = document.querySelector<HTMLElement>(`[data-slot="${section.dataset.slotTools}"]`); if (!block) return [];
+        const block = blocks.get(section.dataset.slotTools!); if (!block) return [];
         const natural = [...section.children].reduce((height, child) => height + (child as HTMLElement).offsetHeight, 0) + (section.children.length > 1 ? 6 : 0);
         return [{ id: section.dataset.slotTools!, top: block.offsetTop, blockHeight: block.offsetHeight, height: natural }];
       });
@@ -276,7 +278,6 @@ function MessageView({ message, ...props }: ConversationProps & { message: Messa
     };
     const observer = new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); });
     observer.observe(document.querySelector('.message-content')!);
-    document.querySelectorAll('[data-slot]').forEach(el => observer.observe(el));
     toolsHost.querySelectorAll('[data-side-content]').forEach(el => observer.observe(el));
     update();
     return () => { observer.disconnect(); cancelAnimationFrame(frame); };

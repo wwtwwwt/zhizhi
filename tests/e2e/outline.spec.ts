@@ -121,3 +121,27 @@ test('imported article shows an outline without changing its user role',async({p
   await outline.getByRole('button',{name:'收起目录',exact:true}).click();
   await expect(outline.getByRole('button',{name:'展开目录',exact:true})).toBeVisible();
 });
+
+
+test('long document outline compacts to six rows and navigation appears with two AI messages',async({page,request})=>{
+  await request.put('/api/settings',{data:{showOutline:true}});
+  const markdown=Array.from({length:12},(_,i)=>`## 章节${i+1}\n\n${'长论文正文。'.repeat(80)}\n\n### 子节${i+1}\n\n${'细节段落。'.repeat(80)}`).join('\n\n');
+  const imported=await(await request.post('/api/documents/import',{data:{name:'长论文.md',markdown,resources:[]}})).json();
+  await page.route(`**/api/streams/${imported.root_stream_id}`,async route=>{
+    const response=await route.fetch(),stream=await response.json();
+    stream.messages[0].role='assistant';stream.messages.push({...stream.messages[0],id:'second-outline-message',ordinal:1,slots:[],document_name:null,content_markdown:'',status:'complete'});
+    await route.fulfill({response,json:stream});
+  });
+  await page.goto('/');await page.evaluate(id=>localStorage.setItem('lastSession',id),imported.id);await page.reload();
+  await expect(page.getByRole('navigation',{name:'消息定位'}).getByRole('button')).toHaveCount(2);
+  const outline=page.getByRole('navigation',{name:'当前回答目录'});
+  await expect(outline.locator('.message-outline-items button')).toHaveCount(24);
+  await outline.getByRole('button',{name:'精简目录',exact:true}).click();
+  await expect(outline.locator('.message-outline-items button')).toHaveCount(12);
+  const items=outline.locator('.message-outline-items');
+  const sizes=await items.evaluate(el=>({height:el.clientHeight,total:el.scrollHeight,row:el.querySelector('button')!.getBoundingClientRect().height}));
+  expect(sizes.height).toBeLessThanOrEqual(sizes.row*6+5);expect(sizes.total).toBeGreaterThan(sizes.height);
+  await items.hover();await page.mouse.wheel(0,200);await expect.poll(()=>items.evaluate(el=>el.scrollTop)).toBeGreaterThan(0);
+  await outline.getByRole('button',{name:'显示全部标题',exact:true}).click();await expect(outline.locator('.outline-subheading')).toHaveCount(12);
+  await request.delete(`/api/sessions/${imported.id}`);
+});

@@ -33,6 +33,18 @@ test('outline fades between answers and disappears for an answer without heading
   await expect(page.locator('.workspace .message-outline')).toHaveCount(0);
   await jump(0);
   await expect(outline).toContainText('前一回答');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  const controls=page.getByRole('navigation',{name:'阅读定位',exact:true});
+  await expect(controls.getByRole('button')).toHaveCount(4);
+  await controls.getByRole('button',{name:'定位到下一条消息',exact:true}).click();await expect(outline).toContainText('后一回答');
+  await controls.getByRole('button',{name:'定位到上一条消息',exact:true}).click();await expect(outline).toContainText('前一回答');
+  const bottom=controls.getByRole('button',{name:'定位到底部',exact:true});
+  const muted=await bottom.evaluate(el=>getComputedStyle(el).color);await bottom.hover();
+  await expect.poll(()=>bottom.evaluate(el=>getComputedStyle(el).color)).not.toBe(muted);
+  await bottom.click();
+  await expect.poll(()=>page.locator('.workspace .conversation-scroll').evaluate(el=>el.scrollHeight-el.clientHeight-el.scrollTop)).toBeLessThan(2);
+  await controls.getByRole('button',{name:'定位到顶端',exact:true}).click();
+  await expect.poll(()=>page.locator('.workspace .conversation-scroll').evaluate(el=>el.scrollTop)).toBe(0);
 });
 
 test('answer outline tracks headings, jumps, collapses and hides short messages', async ({ page, request }) => {

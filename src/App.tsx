@@ -5,7 +5,7 @@ import { LinkViewer } from './LinkViewer';
 import { ConversationMap } from './ConversationMap';
 import { mapBranchPath, type ConversationMapData, type MapMessage, type MapSearchHit } from '../shared/conversation-map';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ArrowUp, ArrowUpCircle, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ArrowUpCircle, ArrowUpToLine, ArrowDownToLine, ChevronUp, ChevronDown, Check, ChevronLeft, ChevronRight, GitBranch, MessageSquare, GripVertical, Copy, History, StickyNote, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Settings as SettingsIcon, Sparkles, Square, Trash2, Files, FileText, X } from 'lucide-react';
 import { api, cancelJob, deleteBranch, forgetStreams, loadSettings, loadModels, loadSearchSettings, loadStream, notify, refreshSessions, runGeneration, useAppState } from './client';
 import { createPortal } from 'react-dom';
 import { useCenteredResize } from './useCenteredResize';
@@ -206,6 +206,19 @@ function Conversation(props: ConversationProps) {
     el.scrollTo({ top: el.scrollTop + message.getBoundingClientRect().top - el.getBoundingClientRect().top - 8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
     message.focus({ preventScroll: true });
   };
+  const navigateReading = (target: 'top' | 'previous' | 'next' | 'bottom') => {
+    const viewport = scroll.current; if (!viewport) return;
+    stopFollowing(); nearBottom.current = false;
+    if (target === 'top' || target === 'bottom') {
+      viewport.scrollTo({top:target === 'top' ? 0 : viewport.scrollHeight,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'});
+      return;
+    }
+    const messages = [...viewport.querySelectorAll<HTMLElement>('[data-message]')];
+    const limit = viewport.getBoundingClientRect().top + 36;
+    const current = Math.max(0,messages.findLastIndex(message => message.getBoundingClientRect().top <= limit));
+    const message = messages[Math.max(0,Math.min(messages.length-1,current + (target === 'previous' ? -1 : 1)))];
+    if (message?.dataset.message) jumpToMessage(message.dataset.message);
+  };
   const jobs = Object.values(state.jobs).filter(j => j.streamId === streamId);
   const busy = jobs.some(j => j.kind === 'reply') || !!stream?.messages.some(m => ['queued','streaming'].includes(m.status));
   const assistantCount = stream?.messages.filter(message => message.role === 'assistant').length || 0;
@@ -248,6 +261,12 @@ function Conversation(props: ConversationProps) {
     {!empty && readingBottom !== undefined && <div className="conversation-bottom-fade" aria-hidden="true" style={{ top: readingBottom - 28 }}/>}
     {navPreview && <div className="message-nav-preview" role="tooltip" style={{ top: navPreview.top }}><>{navPreview.question && <div className="nav-question-preview">{navPreview.question.slots.length ? navPreview.question.slots.map(s => s.node.selection_text).join(' ') : navPreview.question.content_markdown}</div>}<div className="nav-answer-preview">{(navPreview.message.slots.length ? navPreview.message.slots.map(s => s.node.selection_text).join('\n\n') : navPreview.message.content_markdown).slice(0,1200)}</div></></div>}
     {state.settings?.showOutline === true && <MessageOutline scroll={scroll} messageId={outlineMessage} onNavigate={() => { stopFollowing(); nearBottom.current = false; }}/>}
+    {!empty && !!stream?.messages.length && <nav className="reading-navigation" aria-label="阅读定位">
+      <button type="button" aria-label="定位到顶端" title="定位到顶端" onClick={()=>navigateReading('top')}><ArrowUpToLine size={16}/></button>
+      <button type="button" aria-label="定位到上一条消息" title="定位到上一条消息" onClick={()=>navigateReading('previous')}><ChevronUp size={16}/></button>
+      <button type="button" aria-label="定位到下一条消息" title="定位到下一条消息" onClick={()=>navigateReading('next')}><ChevronDown size={16}/></button>
+      <button type="button" aria-label="定位到底部" title="定位到底部" onClick={()=>navigateReading('bottom')}><ArrowDownToLine size={16}/></button>
+    </nav>}
     <Composer key={streamId || 'new'} streamId={streamId} busy={busy} onSend={onSend} compact={depth > 0}/>
   </section>;
 }
